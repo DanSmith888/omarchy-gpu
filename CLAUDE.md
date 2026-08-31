@@ -16,6 +16,9 @@ file holds only what is specific to this repo.
 
 - `manifest.json` — the contract; bump `version` on release.
 - `BarWidget.qml` — entry point. Owns the pill and the single IpcHandler; forwards open/close/opened to Panel.qml, which owns all state.
+- `Model.js` — pure formatting/colour helpers; testable with plain node.
+- `Sparkline.qml` — Canvas line graph used for the load history.
+- `Panel.qml` — all state and the whole popup.
 - `bin/gpustatus` — one JSON line for the QML; `{}` = nothing to show.
 - `bin/gpuctl` — CLI: `get [--json]`, `doctor`, action verbs. Holds
   `PLUGIN_ID` / `REPO_URL` (keep in sync with the manifest).
@@ -43,4 +46,17 @@ bin/gpuctl doctor
 
 ## Gotchas
 
-- TODO: plugin-specific things the next session must know.
+- `gpustatus` imports `gpuctl` in-process (SourceFileLoader) so a poll is
+  one Python start-up, not two. It takes the card index as argv[1].
+- nvidia-smi's `--query-compute-apps` omits *graphics* clients, so the
+  process list also parses `nvidia-smi -q -d PIDS`. Both are needed to see
+  Hyprland/browser VRAM.
+- `to_num()` turns "[N/A]" and "[Not Supported]" into None; every reading
+  is nullable and the QML hides the row rather than printing a zero.
+- AMD fan % is derived from `pwm1` (0-255); `fan1_input` is RPM and is not
+  a percentage, so it is left null.
+- qmllint reports "unqualified access" for `root.`/`column.` references
+  inside inline `component`s and `Component {}` blocks. Those are expected;
+  only `Error:` lines matter.
+- Panel content must NOT add `anchors.margins` — `KeyboardPanel.padding`
+  already insets it, the way tailscale and agents do it.

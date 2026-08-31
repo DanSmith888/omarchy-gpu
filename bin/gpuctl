@@ -1,101 +1,329 @@
 #!/usr/bin/env python3
-"""gpuctl — command-line backend for the Gpu Omarchy plugin.
+"""gpuctl — command-line backend for the GPU Omarchy plugin.
 
 Standard library only: no daemon, no background process. Each invocation
-does its work and exits.
+queries the GPU and exits.
+
+Supported:
+  NVIDIA  via nvidia-smi (load, VRAM, temp, power, clocks, fan, processes)
+  AMD     via /sys/class/drm/card*/device (amdgpu: busy %, VRAM, hwmon)
+  Intel   via /sys/class/drm/card*/device (i915/xe: frequency, hwmon)
 
 Usage:
-  gpuctl get [--json]     current state
-  gpuctl doctor           check every link from the source to the bar
-  gpuctl set <value>      TODO: real verbs
+  gpuctl get [--json]        current state for the first/selected GPU
+  gpuctl list [--json]       every GPU discovered
+  gpuctl doctor              check every link from the driver to the bar
 """
 
 import argparse
-import fcntl
+import glob
 import json
 import os
+import re
+import shutil
 import subprocess
 import sys
-import time
 
 PLUGIN_ID = "dansmith888.gpu"
 REPO_URL = "https://github.com/DanSmith888/omarchy-gpu.git"
-REQUIRED_FILES = ("manifest.json", "BarWidget.qml", "Panel.qml", "bin/gpustatus", "bin/gpuctl", )
+REQUIRED_FILES = ("manifest.json", "BarWidget.qml", "Panel.qml", "Model.js",
+                  "Sparkline.qml", "bin/gpustatus", "bin/gpuctl")
 
-# Never /tmp: a predictable shared path could be pre-created by another user.
-_RUNTIME_DIR = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
-LOCK_PATH = os.path.join(_RUNTIME_DIR, "gpuctl.lock")
-LOCK_TIMEOUT = 30.0
-TIMEOUT = 10
+TIMEOUT = 4
+TOP_DEFAULT = 5
+
+# One nvidia-smi call for everything the panel shows.
+NV_FIELDS = [
+    "index", "name", "driver_version", "utilization.gpu", "utilization.memory",
+    "memory.used", "memory.total", "temperature.gpu", "power.draw",
+    "power.limit", "clocks.gr", "clocks.max.gr", "clocks.mem", "fan.speed",
+    "pstate",
+]
 
 
-def _run(cmd, timeout=TIMEOUT):
-    """(rc, stdout, stderr); rc -1 on timeout/missing binary. Never raises."""
+def run(cmd, timeout=TIMEOUT):
+    """stdout on success, None on any failure. Never raises, never hangs."""
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-        return r.returncode, r.stdout, r.stderr
-    except Exception as exc:
-        return -1, "", str(exc)
+        return r.stdout if r.returncode == 0 else None
+    except Exception:
+        return None
 
 
-class Source:
-    """Exclusive access to whatever this plugin talks to.
+def read(path):
+    try:
+        with open(path) as f:
+            return f.read()
+    except OSError:
+        return None
 
-    Every open goes through here so status, ctl and any research tools
-    serialise on one lock.
-    """
 
-    def __enter__(self):
-        self._lock = open(LOCK_PATH, "w")
-        deadline = time.monotonic() + LOCK_TIMEOUT
-        while True:
-            try:
-                fcntl.flock(self._lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                break
-            except BlockingIOError:
-                if time.monotonic() > deadline:
-                    self._lock.close()
-                    raise SystemExit(
-                        f"gpuctl: busy (waited {LOCK_TIMEOUT:.0f}s for {LOCK_PATH})")
-                time.sleep(0.25)
-        # TODO: open the real resource here.
-        return self
+def read_int(path):
+    raw = read(path)
+    if raw is None:
+        return None
+    try:
+        return int(raw.strip())
+    except ValueError:
+        return None
 
-    def __exit__(self, *_):
-        # TODO: close the real resource here.
-        try:
-            fcntl.flock(self._lock, fcntl.LOCK_UN)
-        finally:
-            self._lock.close()
 
-    def get(self):
-        """Current state as a dict. None values mean unsupported/no answer."""
-        return {"label": "TODO", "value": None}   # TODO
+def to_num(text):
+    """'24.06' -> 24.06; '[N/A]', '', None -> None."""
+    if text is None:
+        return None
+    t = str(text).strip()
+    if t == "" or t.startswith("[") or t.lower() in ("n/a", "not supported", "unknown"):
+        return None
+    try:
+        v = float(t)
+    except ValueError:
+        return None
+    return int(v) if v.is_integer() else round(v, 2)
 
-    def set(self, value):
-        raise SystemExit("gpuctl: set not implemented")   # TODO
 
+# ---- NVIDIA -------------------------------------------------------------
+
+def nvidia_available():
+    return shutil.which("nvidia-smi") is not None
+
+
+def nvidia_list():
+    if not nvidia_available():
+        return []
+    out = run(["nvidia-smi", "--query-gpu=" + ",".join(NV_FIELDS),
+               "--format=csv,noheader,nounits"])
+    if not out:
+        return []
+    gpus = []
+    for line in out.strip().splitlines():
+        parts = [p.strip() for p in line.split(",")]
+        if len(parts) < len(NV_FIELDS):
+            continue
+        f = dict(zip(NV_FIELDS, parts))
+        gpus.append({
+            "vendor": "NVIDIA",
+            "index": to_num(f["index"]) or 0,
+            "name": f["name"],
+            "driver": f["driver_version"] or None,
+            "load": to_num(f["utilization.gpu"]),
+            "memLoad": to_num(f["utilization.memory"]),
+            "memUsedMiB": to_num(f["memory.used"]),
+            "memTotalMiB": to_num(f["memory.total"]),
+            "tempC": to_num(f["temperature.gpu"]),
+            "powerW": to_num(f["power.draw"]),
+            "powerLimitW": to_num(f["power.limit"]),
+            "clockMhz": to_num(f["clocks.gr"]),
+            "maxClockMhz": to_num(f["clocks.max.gr"]),
+            "memClockMhz": to_num(f["clocks.mem"]),
+            "fanPct": to_num(f["fan.speed"]),
+            "pstate": f["pstate"] or None,
+        })
+    return gpus
+
+
+def nvidia_processes(index, top_n=TOP_DEFAULT):
+    """[{pid, name, memMiB}] — graphics and compute clients, biggest first."""
+    out = run(["nvidia-smi", "--query-compute-apps=pid,used_memory",
+               "--format=csv,noheader,nounits"])
+    procs = {}
+    if out:
+        for line in out.strip().splitlines():
+            parts = [p.strip() for p in line.split(",")]
+            if len(parts) < 2:
+                continue
+            pid = to_num(parts[0])
+            if pid is None:
+                continue
+            procs[int(pid)] = to_num(parts[-1]) or 0
+
+    # -q -d PIDS also lists graphics clients, which the query API omits.
+    out = run(["nvidia-smi", "-q", "-d", "PIDS"])
+    if out:
+        pid = None
+        for line in out.splitlines():
+            m = re.match(r"\s*Process ID\s*:\s*(\d+)", line)
+            if m:
+                pid = int(m.group(1))
+                continue
+            m = re.match(r"\s*Used GPU Memory\s*:\s*(\d+)", line)
+            if m and pid is not None:
+                procs[pid] = max(procs.get(pid, 0), int(m.group(1)))
+                pid = None
+
+    out_list = []
+    for pid, mem in procs.items():
+        name = proc_name(pid)
+        if name:
+            out_list.append({"pid": pid, "name": name, "memMiB": mem})
+    out_list.sort(key=lambda p: (-(p["memMiB"] or 0), p["pid"]))
+    return out_list[:top_n]
+
+
+def proc_name(pid):
+    """Readable name for a pid, or None once it has exited."""
+    raw = read(f"/proc/{pid}/comm")
+    comm = raw.strip() if raw else ""
+    cmd = read(f"/proc/{pid}/cmdline")
+    if cmd:
+        base = os.path.basename(cmd.split("\0", 1)[0])
+        if base and (len(comm) >= 15 or base.startswith(comm)):
+            return base
+    return comm or None
+
+
+# ---- AMD / Intel via sysfs ---------------------------------------------
+
+def sysfs_hwmon(device_dir):
+    """{'tempC','powerW','fanPct'} from the card's hwmon node."""
+    out = {"tempC": None, "powerW": None, "fanPct": None}
+    for hw in glob.glob(os.path.join(device_dir, "hwmon", "hwmon*")):
+        milli = read_int(os.path.join(hw, "temp1_input"))
+        if milli is not None and out["tempC"] is None:
+            out["tempC"] = round(milli / 1000.0, 1)
+        micro = read_int(os.path.join(hw, "power1_average"))
+        if micro is None:
+            micro = read_int(os.path.join(hw, "power1_input"))
+        if micro is not None and out["powerW"] is None:
+            out["powerW"] = round(micro / 1000000.0, 1)
+        rpm = read_int(os.path.join(hw, "fan1_input"))
+        pwm = read_int(os.path.join(hw, "pwm1"))
+        if out["fanPct"] is None and pwm is not None:
+            out["fanPct"] = round(100.0 * pwm / 255.0)
+        elif out["fanPct"] is None and rpm is not None:
+            out["fanPct"] = None
+    return out
+
+
+def sysfs_list():
+    """AMD and Intel cards from /sys/class/drm. Empty when nothing matches."""
+    gpus = []
+    for card in sorted(glob.glob("/sys/class/drm/card[0-9]*")):
+        if "-" in os.path.basename(card):   # connectors, not cards
+            continue
+        dev = os.path.join(card, "device")
+        uevent = read(os.path.join(dev, "uevent")) or ""
+        driver = ""
+        m = re.search(r"^DRIVER=(.+)$", uevent, re.M)
+        if m:
+            driver = m.group(1).strip()
+        if driver not in ("amdgpu", "i915", "xe", "radeon"):
+            continue
+
+        vendor = "AMD" if driver in ("amdgpu", "radeon") else "Intel"
+        load = read_int(os.path.join(dev, "gpu_busy_percent"))
+        used = read_int(os.path.join(dev, "mem_info_vram_used"))
+        total = read_int(os.path.join(dev, "mem_info_vram_total"))
+        clock = None
+        raw = read(os.path.join(dev, "pp_dpm_sclk")) or ""
+        for line in raw.splitlines():
+            if line.strip().endswith("*"):
+                m = re.search(r"(\d+)\s*Mhz", line, re.I)
+                if m:
+                    clock = int(m.group(1))
+        if clock is None:
+            khz = read_int(os.path.join(dev, "gt_cur_freq_mhz"))
+            clock = khz if khz else None
+
+        hw = sysfs_hwmon(dev)
+        gpus.append({
+            "vendor": vendor,
+            "index": len(gpus),
+            "name": gpu_name(dev, vendor, driver),
+            "driver": driver,
+            "load": load,
+            "memLoad": None,
+            "memUsedMiB": round(used / 1048576.0) if used else None,
+            "memTotalMiB": round(total / 1048576.0) if total else None,
+            "tempC": hw["tempC"],
+            "powerW": hw["powerW"],
+            "powerLimitW": None,
+            "clockMhz": clock,
+            "maxClockMhz": None,
+            "memClockMhz": None,
+            "fanPct": hw["fanPct"],
+            "pstate": None,
+        })
+    return gpus
+
+
+def gpu_name(dev, vendor, driver):
+    """Marketing-ish name from lspci, falling back to the PCI id."""
+    slot = os.path.basename(os.path.realpath(dev))
+    out = run(["lspci", "-s", slot])
+    if out:
+        line = out.strip().splitlines()[0] if out.strip() else ""
+        m = re.search(r":\s*(.+)$", line)
+        if m:
+            name = m.group(1)
+            name = re.sub(r"^(VGA compatible controller|3D controller|Display controller):\s*", "", name)
+            name = re.sub(r"\s*\(rev [0-9a-f]+\)$", "", name)
+            return name.strip()
+    return f"{vendor} GPU ({driver})"
+
+
+# ---- assembly -----------------------------------------------------------
+
+def list_gpus(top_n=TOP_DEFAULT):
+    gpus = nvidia_list()
+    for g in gpus:
+        g["processes"] = nvidia_processes(g["index"], top_n)
+    sys_gpus = sysfs_list()
+    for g in sys_gpus:
+        # No per-process VRAM accounting outside NVIDIA; null hides the list.
+        g["processes"] = None
+    gpus.extend(sys_gpus)
+    return gpus
+
+
+def get(index=0, top_n=TOP_DEFAULT):
+    gpus = list_gpus(top_n)
+    if not gpus:
+        return None
+    pick = gpus[0]
+    for g in gpus:
+        if g["index"] == index:
+            pick = g
+            break
+    state = dict(pick)
+    state["present"] = True
+    state["count"] = len(gpus)
+    state["gpus"] = [{"index": g["index"], "name": g["name"], "vendor": g["vendor"]} for g in gpus]
+    return state
+
+
+# ---- doctor -------------------------------------------------------------
 
 def doctor():
-    """Check every link from the source to the bar widget.
-
-    An absent widget can have many causes that look identical from outside;
-    this says which link is broken and how to fix it.
-    """
     checks = []
 
     def add(ok, label, detail="", fix=""):
         checks.append((ok, label, detail, fix))
 
-    # 1. source — TODO: adapter/device/daemon checks go here, cheapest first.
-    try:
-        with Source() as src:
-            state = src.get()
-        add(state is not None, "Source answers", "", "TODO: fix hint")
-    except SystemExit as exc:
-        add(False, "Source answers", str(exc), "TODO: fix hint")
+    add(bool(glob.glob("/sys/class/drm/card[0-9]*")), "DRM cards present",
+        ", ".join(os.path.basename(c) for c in sorted(glob.glob("/sys/class/drm/card[0-9]*"))
+                  if "-" not in os.path.basename(c)),
+        "no GPU exposed by the kernel; nothing to show")
 
-    # 2. plugin
+    if nvidia_available():
+        gpus = nvidia_list()
+        add(bool(gpus), "nvidia-smi answers",
+            f"{len(gpus)} GPU(s)" if gpus else "nvidia-smi ran but returned nothing",
+            "check the driver: nvidia-smi")
+    else:
+        add(True, "nvidia-smi", "not installed; NVIDIA readings unavailable")
+
+    sysg = sysfs_list()
+    add(True, "sysfs GPUs",
+        ", ".join(f"{g['vendor']} {g['driver']}" for g in sysg) if sysg
+        else "no amdgpu/i915/xe card; AMD and Intel readings unavailable")
+
+    state = get()
+    add(state is not None, "Readings available",
+        f"{state['name']}: load {state['load']}%, {state['memUsedMiB']}/{state['memTotalMiB']} MiB"
+        if state else "",
+        "install the vendor driver tools (nvidia-utils for NVIDIA)")
+
     plug = os.path.expanduser("~/.config/omarchy/plugins/" + PLUGIN_ID)
     add(os.path.isdir(plug), "Plugin installed", plug,
         "omarchy plugin add " + REPO_URL + " --enable")
@@ -104,12 +332,11 @@ def doctor():
         "missing: " + ", ".join(missing) if missing else "",
         "omarchy plugin update " + PLUGIN_ID)
 
-    # 3. bar layout
     try:
         with open(os.path.expanduser("~/.config/omarchy/shell.json")) as f:
             layout = json.load(f).get("bar", {}).get("layout", {})
         placed = any(PLUGIN_ID == w.get("id")
-                     for sec in layout.values() for w in sec)
+                     for sec in layout.values() for w in sec if isinstance(w, dict))
     except (OSError, ValueError, AttributeError):
         placed = False
     add(placed, "Widget placed in the bar", "",
@@ -135,10 +362,33 @@ def doctor():
     return 1 if failed else 0
 
 
+# ---- CLI ---------------------------------------------------------------
+
+def print_human(state):
+    print(f"  {state['name']}  ({state['vendor']}, driver {state['driver'] or '-'})")
+    rows = [
+        ("load", f"{state['load']}%" if state["load"] is not None else None),
+        ("vram", f"{state['memUsedMiB']} / {state['memTotalMiB']} MiB"
+                 if state["memUsedMiB"] is not None else None),
+        ("temp", f"{state['tempC']}°C" if state["tempC"] is not None else None),
+        ("power", f"{state['powerW']} / {state['powerLimitW']} W"
+                  if state["powerW"] is not None else None),
+        ("clock", f"{state['clockMhz']} MHz" if state["clockMhz"] is not None else None),
+        ("memclk", f"{state['memClockMhz']} MHz" if state["memClockMhz"] is not None else None),
+        ("fan", f"{state['fanPct']}%" if state["fanPct"] is not None else None),
+        ("pstate", state["pstate"]),
+    ]
+    width = max(len(r[0]) for r in rows)
+    for label, value in rows:
+        if value is not None:
+            print(f"  {label.ljust(width)}  {value}")
+    if state.get("processes"):
+        print("  clients")
+        for p in state["processes"]:
+            print(f"    {p['memMiB']:>6} MiB  {p['pid']:>7}  {p['name']}")
+
+
 def main():
-    # SUPPRESS matters: without it the subparser re-declares these flags with
-    # their own defaults and clobbers the top-level values, so `--json` only
-    # works on one side of the subcommand.
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--json", action="store_true", default=argparse.SUPPRESS,
                         help="machine-readable output")
@@ -146,10 +396,10 @@ def main():
     ap = argparse.ArgumentParser(prog="gpuctl", parents=[common],
                                  description=__doc__.split("\n\n")[1])
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("get", parents=[common])
+    p = sub.add_parser("get", parents=[common])
+    p.add_argument("-i", "--index", type=int, default=0)
+    sub.add_parser("list", parents=[common])
     sub.add_parser("doctor", parents=[common])
-    p = sub.add_parser("set", parents=[common])
-    p.add_argument("value")
 
     args = ap.parse_args()
     as_json = getattr(args, "json", False)
@@ -157,19 +407,24 @@ def main():
     if args.cmd == "doctor":
         return doctor()
 
-    with Source() as src:
-        if args.cmd == "get":
-            state = src.get()
-            if as_json:
-                print(json.dumps(state))
-            else:
-                width = max(len(k) for k in state)
-                for k, v in state.items():
-                    print(f"  {k.ljust(width)}  {'-' if v is None else v}")
-            return 0
-        if args.cmd == "set":
-            src.set(args.value)
-            return 0
+    if args.cmd == "list":
+        gpus = list_gpus()
+        if as_json:
+            print(json.dumps(gpus))
+        else:
+            for g in gpus:
+                print(f"  [{g['index']}] {g['vendor']:6} {g['name']}")
+        return 0
+
+    if args.cmd == "get":
+        state = get(args.index)
+        if state is None:
+            raise SystemExit("gpuctl: no GPU found")
+        if as_json:
+            print(json.dumps(state))
+        else:
+            print_human(state)
+        return 0
     return 0
 
 

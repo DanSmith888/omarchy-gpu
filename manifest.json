@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
   "id": "dansmith888.gpu",
-  "name": "Gpu",
+  "name": "GPU",
   "version": "0.1.0",
   "author": "Daniel Smith",
   "license": "MIT",
-  "description": "GPU load, VRAM, temperature and power in the Omarchy bar",
+  "description": "GPU load, VRAM, temperature, power and clocks in the Omarchy bar",
   "kinds": [
     "bar-widget"
   ],
@@ -13,10 +13,125 @@
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "Gpu",
-    "description": "GPU load, VRAM, temperature and power in the Omarchy bar",
+    "displayName": "GPU",
+    "description": "Load, temperature, power and VRAM in the bar; a load graph, sensors and the processes holding GPU memory in the panel. NVIDIA, AMD and Intel.",
     "category": "Hardware",
+    "aliases": [
+      "gpu",
+      "nvidia",
+      "graphics"
+    ],
     "allowMultiple": false,
-    "defaultSection": "right"
+    "defaultSection": "right",
+    "defaults": {
+      "pollIntervalMs": 2000,
+      "gpuIndex": 0,
+      "showIcon": true,
+      "showLoad": true,
+      "showTemp": true,
+      "showPower": false,
+      "showVram": false,
+      "temperatureUnit": "C",
+      "historySamples": 60,
+      "busyFrom": 50,
+      "hotFrom": 85,
+      "busyColor": "",
+      "hotColor": "",
+      "topCount": 5
+    },
+    "schema": [
+      {
+        "key": "pollIntervalMs",
+        "type": "integer",
+        "label": "Refresh interval (ms)",
+        "min": 500,
+        "max": 60000,
+        "step": 500,
+        "defaultValue": 2000
+      },
+      {
+        "key": "gpuIndex",
+        "type": "integer",
+        "label": "Card index",
+        "min": 0,
+        "max": 15,
+        "step": 1,
+        "defaultValue": 0,
+        "description": "Which GPU to show when the machine has more than one."
+      },
+      {
+        "key": "showIcon",
+        "type": "boolean",
+        "label": "Show the card icon",
+        "defaultValue": true
+      },
+      {
+        "key": "showLoad",
+        "type": "boolean",
+        "label": "Show load in the bar",
+        "defaultValue": true
+      },
+      {
+        "key": "showTemp",
+        "type": "boolean",
+        "label": "Show temperature in the bar",
+        "defaultValue": true
+      },
+      {
+        "key": "showPower",
+        "type": "boolean",
+        "label": "Show power in the bar",
+        "defaultValue": false
+      },
+      {
+        "key": "showVram",
+        "type": "boolean",
+        "label": "Show VRAM in the bar",
+        "defaultValue": false
+      },
+      {
+        "key": "temperatureUnit",
+        "type": "enum",
+        "label": "Temperature unit",
+        "options": ["C", "F"],
+        "defaultValue": "C"
+      },
+      {
+        "key": "historySamples",
+        "type": "integer",
+        "label": "Graph history (samples)",
+        "min": 20,
+        "max": 240,
+        "step": 10,
+        "defaultValue": 60
+      },
+      {
+        "key": "busyFrom",
+        "type": "integer",
+        "label": "Busy from (%)",
+        "min": 1,
+        "max": 100,
+        "step": 5,
+        "defaultValue": 50
+      },
+      {
+        "key": "hotFrom",
+        "type": "integer",
+        "label": "Hot from (%)",
+        "min": 1,
+        "max": 100,
+        "step": 5,
+        "defaultValue": 85
+      },
+      {
+        "key": "topCount",
+        "type": "integer",
+        "label": "Processes listed",
+        "min": 1,
+        "max": 10,
+        "step": 1,
+        "defaultValue": 5
+      }
+    ]
   }
 }

@@ -1,15 +1,20 @@
-# Gpu
+# GPU
 
-GPU load, VRAM, temperature and power in the Omarchy bar — in the [Omarchy](https://omarchy.org/) bar.
+Load, temperature, power and VRAM in the [Omarchy](https://omarchy.org/)
+bar, and the full picture one click away.
 
-TODO: one paragraph on what this targets and what it does not.
+The pill shows what you pick and recolours itself as the card gets busy.
+The panel adds a load graph, VRAM and power meters, every sensor the driver
+reports, and — on NVIDIA — the processes actually holding GPU memory.
+
+NVIDIA is read through `nvidia-smi`; AMD and Intel through
+`/sys/class/drm`. Anything a driver doesn't report is hidden rather than
+guessed at. No daemon, no root, no network.
 
 <!-- ![Bar](docs/bar.png) -->
 <!-- ![Panel](docs/panel.png) -->
 
 ## Install
-
-No setup, no root.
 
 ```bash
 omarchy plugin add https://github.com/DanSmith888/omarchy-gpu.git --enable
@@ -21,9 +26,8 @@ omarchy plugin add https://github.com/DanSmith888/omarchy-gpu.git --enable
 ~/.config/omarchy/plugins/dansmith888.gpu/bin/gpuctl doctor
 ```
 
-Verifies every link from the source to the bar and tells you how to fix
-whatever is broken. Put `bin/` on your `PATH` if you want `gpuctl` as
-a command.
+Verifies every link from the driver to the bar and tells you how to fix
+whatever is broken.
 
 ## Update
 
@@ -37,45 +41,75 @@ omarchy plugin update dansmith888.gpu && omarchy restart shell
 omarchy plugin remove dansmith888.gpu
 ```
 
-That removes everything. The plugin never touches anything outside its own
-folder and a lock file in `$XDG_RUNTIME_DIR`.
-
 ## Using it
 
-**Left-click** the pill to open the panel. **Middle-click** to force a
-refresh. To open the panel from a hotkey, bind:
+**Left-click** the pill to open the panel. **Middle-click** forces a
+refresh. Esc closes. To open it from a hotkey:
 
 ```bash
 omarchy-shell shell toggle dansmith888.gpu
 ```
 
-## What it does
+## What it shows
 
-TODO
+| Section | What's in it |
+|---|---|
+| **Hero** | Card name, vendor, VRAM size, driver version, current load |
+| **Graph** | Recent load, 30–240 samples |
+| **Load / VRAM / Power** | Utilisation, video memory in use, board power against its limit |
+| **Sensors** | Temperature, fan, core and memory clocks, performance state |
+| **Using the GPU** | Processes holding GPU memory, biggest first (NVIDIA only) |
+| **In the bar** | Which readings the pill shows, card picker, refresh rate, °C/°F, graph history |
+| **Load colors** | Two thresholds and a color each, taken from your live Omarchy theme |
+
+Settings are stored inline on the widget's `~/.config/omarchy/shell.json`
+entry and apply immediately.
+
+## What each driver gives you
+
+| | NVIDIA | AMD (amdgpu) | Intel (i915/xe) |
+|---|---|---|---|
+| Load | yes | yes | – |
+| VRAM | yes | yes | – |
+| Temperature | yes | yes | yes |
+| Power | yes, with limit | yes | – |
+| Clocks | core + memory | core | core |
+| Fan | yes | yes (from PWM) | – |
+| Processes | yes | – | – |
+
+Rows with nothing behind them are hidden, so the panel only ever shows
+readings that are real.
 
 ## Requirements
 
 - Omarchy (Quattro or later)
-- TODO
+- NVIDIA: `nvidia-utils` (for `nvidia-smi`)
+- AMD / Intel: nothing — the kernel already exposes what's needed
+- `pciutils` for the card's marketing name on AMD and Intel
 
 ## Command line
 
 ```
-gpuctl get [--json]
-gpuctl doctor
+gpuctl get [--json] [-i N]   readings for one card
+gpuctl list [--json]         every GPU discovered
+gpuctl doctor                check every link from the driver to the bar
 ```
 
 ## Good to know
 
-TODO: quirks and limits.
+- On NVIDIA the process list merges compute clients with the graphics
+  clients from `nvidia-smi -q -d PIDS`, so your compositor and browser show
+  up, not just CUDA jobs.
+- Multi-GPU machines get a card picker in the panel; the pill follows it.
+- An idle card usually parks its clock and fan, so low numbers there are
+  the card working correctly, not a bad reading.
 
 ## What runs, and as whom
 
 Omarchy plugins run inside the shell process, unsandboxed, as your user.
 This one runs two Python scripts from its own `bin/` — standard library
-only, no extra packages, no binaries, no network, nothing that needs root.
-It writes nothing outside its folder except a lock file in
-`$XDG_RUNTIME_DIR`.
+only, no extra packages, no network, nothing that needs root. It shells out
+to `nvidia-smi` and `lspci` (both read-only) and writes nothing at all.
 
 ## Licence
 
