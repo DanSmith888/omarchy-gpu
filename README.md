@@ -1,19 +1,16 @@
 # GPU
 
-Load, temperature, power and VRAM in the [Omarchy](https://omarchy.org/)
-bar, and the full picture one click away.
+GPU load, VRAM, temperature and power in the [Omarchy](https://omarchy.org/)
+bar.
 
-The pill shows what you pick and recolours itself as the card gets busy.
-The panel adds a load graph, VRAM and power meters, every sensor the driver
-reports, and — on NVIDIA — the processes actually holding GPU memory.
+![Bar](docs/bar.png)
 
-NVIDIA is read through `nvidia-smi`; AMD and Intel through
-`/sys/class/drm`. Anything a driver doesn't report is hidden rather than
-guessed at. No daemon, no root, no network.
+![Panel](docs/panel.png)
 
-![The trio in the bar](docs/bar.png)
-
-![The panel](docs/panel.png)
+I built this for my own machine, alongside
+[omarchy-cpu](https://github.com/DanSmith888/omarchy-cpu) and
+[omarchy-network](https://github.com/DanSmith888/omarchy-network). The three
+share a panel layout and controls.
 
 ## Install
 
@@ -21,124 +18,87 @@ guessed at. No daemon, no root, no network.
 omarchy plugin add https://github.com/DanSmith888/omarchy-gpu.git --enable
 ```
 
-### Check it
-
-```bash
-~/.config/omarchy/plugins/dansmith888.gpu/bin/gpuctl doctor
-```
-
-Verifies every link from the driver to the bar and tells you how to fix
-whatever is broken.
-
-## Update
-
-```bash
-omarchy plugin update dansmith888.gpu && omarchy restart shell
-```
-
-## Remove
-
-```bash
-omarchy plugin remove dansmith888.gpu
-```
+Update with `omarchy plugin update dansmith888.gpu && omarchy restart shell`.
+Remove with `omarchy plugin remove dansmith888.gpu`.
 
 ## Using it
 
-**Left-click** the pill to open the panel. **Middle-click** opens `btop`,
-reusing an existing btop window rather than stacking up terminals. **Hover**
-for the card name and full readings. Esc closes. To open the panel from a
-hotkey:
+Left click opens the panel. Middle click opens `btop`. Hover for a summary.
 
-```bash
-omarchy-shell shell toggle dansmith888.gpu
-```
+Bind a hotkey with `omarchy-shell shell toggle dansmith888.gpu`.
 
-## What it shows
+## The panel
 
-| Section | What's in it |
+| Section | Shows |
 |---|---|
-| **Hero** | Card name, vendor, VRAM size, driver version, current load |
-| **Graph** | Recent load, 30–240 samples |
-| **Load / VRAM / Power** | Utilisation, video memory in use, board power against its limit |
-| **Sensors** | Temperature, fan, core and memory clocks, performance state |
-| **Using the GPU** | Processes holding GPU memory, biggest first (NVIDIA only) |
-| **In the bar** | Which readings the pill shows, card picker, refresh rate, °C/°F, graph history |
-| **Layout** | Pin the pill to a fixed width, or leave it to size itself |
-| **Warning & alert** | Two thresholds and a color each, taken from your live Omarchy theme; the pill and hero mark follow them |
+| Hero | Card name, vendor, VRAM size, driver version |
+| Graph | Recent load, 30 to 240 samples |
+| Meters | Load, VRAM, power against its limit |
+| Sensors | Temperature, fan, core and memory clocks, performance state |
+| Using the GPU | Processes holding GPU memory, biggest first |
+| In the bar | Which readings the pill shows, card picker, refresh rate, °C or °F |
+| Layout | A fixed pill width, or auto |
+| Warning & alert | Two load thresholds, each with a colour from the active theme |
 
-Settings are stored inline on the widget's `~/.config/omarchy/shell.json`
-entry and apply immediately.
+Settings live on the widget's `~/.config/omarchy/shell.json` entry and apply
+immediately.
 
 ## What each driver gives you
 
-| | NVIDIA | AMD (amdgpu) | Intel (i915/xe) |
+| | NVIDIA | AMD | Intel |
 |---|---|---|---|
-| Load | yes | yes | – |
-| VRAM | yes | yes | – |
+| Load | yes | yes | no |
+| VRAM | yes | yes | no |
 | Temperature | yes | yes | yes |
-| Power | yes, with limit | yes | – |
-| Clocks | core + memory | core | core |
-| Fan | yes | yes (from PWM) | – |
-| Processes | yes | – | – |
+| Power | yes, with limit | yes | no |
+| Clocks | core and memory | core | core |
+| Fan | yes | from PWM | no |
+| Processes | yes | no | no |
 
-Rows with nothing behind them are hidden, so the panel only ever shows
-readings that are real.
+Anything a driver does not report is hidden, so the panel only shows real
+readings.
 
 ## Requirements
 
-- Omarchy (Quattro or later)
-- NVIDIA: `nvidia-utils` (for `nvidia-smi`)
-- AMD / Intel: nothing — the kernel already exposes what's needed
-- `pciutils` for the card's marketing name on AMD and Intel
-- `btop`, only for the middle-click shortcut
+Omarchy (Quattro or later). `nvidia-utils` for NVIDIA. AMD and Intel need
+nothing beyond the kernel. `pciutils` for the card name on AMD and Intel.
+`btop` only for the middle click shortcut.
+
+## Notes
+
+I develop and test this against an NVIDIA card. The AMD and Intel paths follow
+the documented sysfs contract but I cannot exercise them.
+
+The process list merges compute clients with the graphics clients from
+`nvidia-smi -q -d PIDS`, so your compositor and browser show up, not just CUDA
+jobs.
+
+Multi GPU machines get a card picker in the panel, and the pill follows it.
+
+An idle card parks its clock and fan, so low numbers there are the card working
+correctly.
 
 ## Command line
 
 ```
 gpuctl get [--json] [-i N]   readings for one card
-gpuctl list [--json]         every GPU discovered
+gpuctl list [--json]         every GPU found
 gpuctl doctor                check every link from the driver to the bar
 ```
 
-## Good to know
-
-- On NVIDIA the process list merges compute clients with the graphics
-  clients from `nvidia-smi -q -d PIDS`, so your compositor and browser show
-  up, not just CUDA jobs.
-- Multi-GPU machines get a card picker in the panel; the pill follows it.
-- An idle card usually parks its clock and fan, so low numbers there are
-  the card working correctly, not a bad reading.
-- The pill reserves the width of its widest reading
-  (`100% 100° 999W 99.9G`), so nothing in the bar shifts as digits come and
-  go.
-- The warning and alert thresholds were once called busy and hot; an
-  existing bar entry keeps its old `busyFrom`/`hotColor` values.
-
 ## What runs, and as whom
 
-Omarchy plugins run inside the shell process, unsandboxed, as your user.
-This one runs two Python scripts from its own `bin/` — standard library
-only, no extra packages, no network, nothing that needs root. It shells out
-to `nvidia-smi` and `lspci` (both read-only) and writes nothing at all.
-
-## Related
-
-One of a trio that share a panel layout, controls and keybinds, so they read
-as one thing in the bar:
-
-- [omarchy-cpu](https://github.com/DanSmith888/omarchy-cpu) — load, cores,
-  temperature, memory, top processes
-- [omarchy-gpu](https://github.com/DanSmith888/omarchy-gpu) — load, VRAM,
-  power, sensors, GPU clients
-- [omarchy-network](https://github.com/DanSmith888/omarchy-network) —
-  download and upload, history graphs, per-app bandwidth
+Omarchy plugins run inside the shell process, unsandboxed, as your user. This
+one runs two Python scripts from its own `bin/`: standard library only, no
+extra packages, no network, nothing needing root. It shells out to `nvidia-smi`
+and `lspci`, both read only, and writes nothing at all.
 
 ## Credits
 
-The panel borrows its shape from Omarchy's own tailscale and network panels,
-and the history graph from
+The panel borrows its shape from Omarchy's tailscale and network panels, and
+the history graph from
 [stappmus.activity-monitor](https://github.com/stappmus/omarchy-activity-monitor).
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).
