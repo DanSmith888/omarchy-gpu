@@ -262,6 +262,7 @@ Panel {
             fontFamily: Style.font.family
             iconComponent: Component {
               Text {
+                textFormat: Text.PlainText
                 text: "󰢮"
                 color: root.tierColor !== "" ? root.tierColor : root.barForeground
                 font.family: Style.font.family
@@ -361,6 +362,8 @@ Panel {
           }
 
           Text {
+
+            textFormat: Text.PlainText
             width: parent.width
             visible: root.processes !== null && root.processes.length === 0
             text: "Nothing is holding GPU memory right now."
@@ -378,6 +381,8 @@ Panel {
               spacing: Style.space(8)
 
               Text {
+
+                textFormat: Text.PlainText
                 width: procRow.width - procValue.width - procRow.spacing
                 text: procRow.modelData.name + "  (" + procRow.modelData.pid + ")"
                 color: Qt.darker(root.barForeground, 1.3)
@@ -387,6 +392,8 @@ Panel {
               }
 
               Text {
+
+                textFormat: Text.PlainText
                 id: procValue
                 text: Model.mib(procRow.modelData.memMiB)
                 color: root.barForeground
@@ -402,6 +409,8 @@ Panel {
           PanelSectionHeader { text: "IN THE BAR"; foreground: root.barForeground }
 
           Text {
+
+            textFormat: Text.PlainText
             width: parent.width
             text: "Pick what the pill shows. Everything stays visible in here either way."
             color: Qt.darker(root.barForeground, 1.4)
@@ -470,6 +479,8 @@ Panel {
           }
 
           Text {
+
+            textFormat: Text.PlainText
             width: parent.width
             visible: root.gpus.length > 1
             text: "Card"
@@ -490,6 +501,8 @@ Panel {
           }
 
           Text {
+
+            textFormat: Text.PlainText
             width: parent.width
             text: "Refresh interval"
             color: Qt.darker(root.barForeground, 1.4)
@@ -508,6 +521,8 @@ Panel {
           }
 
           Text {
+
+            textFormat: Text.PlainText
             width: parent.width
             visible: root.tempC !== null
             text: "Temperature unit"
@@ -528,6 +543,8 @@ Panel {
           }
 
           Text {
+
+            textFormat: Text.PlainText
             width: parent.width
             text: "Graph history (samples)"
             color: Qt.darker(root.barForeground, 1.4)
@@ -550,6 +567,8 @@ Panel {
           PanelSectionHeader { text: "LAYOUT"; foreground: root.barForeground }
 
           Text {
+
+            textFormat: Text.PlainText
             width: parent.width
             text: "Width of the reading in pixels. 0 fits the reading and holds that width so the bar stays still."
             color: Qt.darker(root.barForeground, 1.4)
@@ -576,6 +595,8 @@ Panel {
           PanelSectionHeader { text: "WARNING & ALERT"; foreground: root.barForeground }
 
           Text {
+
+            textFormat: Text.PlainText
             width: parent.width
             text: "The pill and the hero mark change color once load passes the warning and alert marks. ∅ keeps the normal bar color."
             color: Qt.darker(root.barForeground, 1.4)
@@ -589,6 +610,8 @@ Panel {
             spacing: Style.space(8)
 
             Text {
+
+              textFormat: Text.PlainText
               anchors.verticalCenter: parent.verticalCenter
               text: "Warning from"
               color: Qt.darker(root.barForeground, 1.4)
@@ -610,6 +633,8 @@ Panel {
             }
 
             Text {
+
+              textFormat: Text.PlainText
               anchors.verticalCenter: parent.verticalCenter
               text: "%"
               color: Qt.darker(root.barForeground, 1.4)
@@ -631,6 +656,8 @@ Panel {
             spacing: Style.space(8)
 
             Text {
+
+              textFormat: Text.PlainText
               anchors.verticalCenter: parent.verticalCenter
               text: "Alert from"
               color: Qt.darker(root.barForeground, 1.4)
@@ -651,6 +678,8 @@ Panel {
             }
 
             Text {
+
+              textFormat: Text.PlainText
               anchors.verticalCenter: parent.verticalCenter
               text: "%"
               color: Qt.darker(root.barForeground, 1.4)
@@ -685,6 +714,8 @@ Panel {
       spacing: Style.space(8)
 
       Text {
+
+        textFormat: Text.PlainText
         // Floor it: a fractional remainder rounds the value text past the
         // panel edge and clips its last character.
         width: Math.floor(meter.width - meterValue.width - parent.spacing)
@@ -696,6 +727,8 @@ Panel {
       }
 
       Text {
+
+        textFormat: Text.PlainText
         id: meterValue
         text: meter.valueText
         color: root.barForeground
@@ -729,6 +762,8 @@ Panel {
     spacing: Style.space(8)
 
     Text {
+
+      textFormat: Text.PlainText
       width: stat.width - statValue.width - stat.spacing
       text: stat.label
       color: Qt.darker(root.barForeground, 1.4)
@@ -738,6 +773,8 @@ Panel {
     }
 
     Text {
+
+      textFormat: Text.PlainText
       id: statValue
       text: stat.value
       color: root.barForeground
@@ -769,6 +806,8 @@ Panel {
         border.color: swatches.selected === dot.swatch ? Color.accent : Qt.darker(swatches.foreground, 1.6)
 
         Text {
+
+          textFormat: Text.PlainText
           visible: dot.swatch === ""
           anchors.centerIn: parent
           text: "∅"

@@ -30,6 +30,16 @@ REQUIRED_FILES = ("manifest.json", "BarWidget.qml", "Panel.qml", "Model.js",
                   "Sparkline.qml", "bin/gpustatus", "bin/gpuctl")
 
 TIMEOUT = 4
+# A process name is whatever a local program chose to call itself, and it ends
+# up in the panel and in the bar's tooltip, which renders with a Text that
+# auto-detects rich text. Keep a conservative printable subset so a name can
+# never carry markup into a UI sink.
+_NAME_OK = re.compile(r"[^A-Za-z0-9 ._+@:-]")
+
+
+def safe_name(value):
+    out = _NAME_OK.sub("", str(value or ""))[:NAME_MAX].strip()
+    return out or "?"
 TOP_DEFAULT = 5
 # Longest process name we hand to the UI; anything longer is a command line,
 # not a name.
@@ -178,8 +188,8 @@ def proc_name(pid):
         first = first.split()[0] if first.strip() else ""
         base = os.path.basename(first)[:NAME_MAX]
         if base and (len(comm) >= 15 or base.startswith(comm)):
-            return base
-    return (comm or None) and comm[:NAME_MAX]
+            return safe_name(base)
+    return safe_name(comm) if comm else None
 
 
 # ---- AMD / Intel via sysfs ---------------------------------------------
