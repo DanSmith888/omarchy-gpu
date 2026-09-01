@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
+import "Model.js" as Model
 
 // GPU: the pill in the bar, and the host for the panel.
 //
@@ -44,11 +45,16 @@ BarWidget {
 
   readonly property string tooltip: {
     if (!panel) return "GPU"
-    var bits = [panel.name === "" ? "GPU" : panel.name, "Load " + panel.loadText]
-    if (panel.tempC !== null) bits.push(panel.tempText)
-    if (panel.memUsedMiB !== null) bits.push(panel.vramText)
-    if (panel.powerW !== null) bits.push(panel.powerText)
-    return bits.join("  ·  ")
+    var top = panel.processes && panel.processes.length > 0 ? panel.processes[0] : null
+    return Model.tooltip(panel.name === "" ? "GPU" : panel.name, [
+      ["Load", panel.load !== null ? panel.loadText : ""],
+      ["VRAM", panel.memUsedMiB !== null ? panel.vramText : ""],
+      ["Power", panel.powerW !== null ? panel.powerText : ""],
+      ["Temperature", panel.tempC !== null ? panel.tempText : ""],
+      ["Clock", panel.clockMhz !== null ? Model.mhz(panel.clockMhz) : ""],
+      ["Fan", panel.fanPct !== null ? Model.pct(panel.fanPct) : ""],
+      ["Busiest", top ? top.name + "  " + Model.mib(top.memMiB) : ""]
+    ])
   }
 
   // ---- Panel lifecycle contract (shell.summon/hide/toggle routing).

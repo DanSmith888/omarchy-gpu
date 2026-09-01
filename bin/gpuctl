@@ -31,6 +31,9 @@ REQUIRED_FILES = ("manifest.json", "BarWidget.qml", "Panel.qml", "Model.js",
 
 TIMEOUT = 4
 TOP_DEFAULT = 5
+# Longest process name we hand to the UI; anything longer is a command line,
+# not a name.
+NAME_MAX = 24
 
 # One nvidia-smi call for everything the panel shows.
 NV_FIELDS = [
@@ -161,15 +164,22 @@ def nvidia_processes(index, top_n=TOP_DEFAULT):
 
 
 def proc_name(pid):
-    """Readable name for a pid, or None once it has exited."""
+    """A short, readable name for a pid, or None once it has exited.
+
+    argv[0] needs care: Chromium and friends rewrite their cmdline as one
+    space-separated string rather than NUL-separated argv, so splitting on NUL
+    alone hands back the entire 400-character command line.
+    """
     raw = read(f"/proc/{pid}/comm")
     comm = raw.strip() if raw else ""
     cmd = read(f"/proc/{pid}/cmdline")
     if cmd:
-        base = os.path.basename(cmd.split("\0", 1)[0])
+        first = cmd.split("\0", 1)[0]
+        first = first.split()[0] if first.strip() else ""
+        base = os.path.basename(first)[:NAME_MAX]
         if base and (len(comm) >= 15 or base.startswith(comm)):
             return base
-    return comm or None
+    return (comm or None) and comm[:NAME_MAX]
 
 
 # ---- AMD / Intel via sysfs ---------------------------------------------
