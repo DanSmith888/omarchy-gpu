@@ -38,7 +38,7 @@ outside the plugin folder.
 Developed and tested against an NVIDIA card. The AMD and Intel paths follow the
 documented sysfs contract but are not exercised on my hardware.
 
-One of a trio with omarchy-cpu and omarchy-network-speed, which share the same
+One of a trio with omarchy-cpu and omarchy-network, which share the same
 panel layout and controls.
 
 ### Submission checklist
