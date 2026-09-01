@@ -9,7 +9,7 @@ bar.
 
 I built this for my own machine, alongside
 [omarchy-cpu](https://github.com/DanSmith888/omarchy-cpu) and
-[omarchy-network](https://github.com/DanSmith888/omarchy-network). The three
+[omarchy-bandwidth](https://github.com/DanSmith888/omarchy-bandwidth). The three
 share a panel layout and controls.
 
 ## Install
