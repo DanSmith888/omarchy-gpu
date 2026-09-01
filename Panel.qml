@@ -62,10 +62,13 @@ Panel {
   readonly property bool showVram: Model.asBool(setting("showVram", false), false)
   readonly property string temperatureUnit: Model.normalizeUnit(setting("temperatureUnit", "C"))
   readonly property int historySamples: Model.clampInt(setting("historySamples", 60), 20, 240, 60)
-  readonly property int busyFrom: Model.clampInt(setting("busyFrom", 50), 1, 100, 50)
-  readonly property int hotFrom: Model.clampInt(setting("hotFrom", 85), 1, 100, 85)
-  readonly property string busyColor: String(setting("busyColor", ""))
-  readonly property string hotColor: String(setting("hotColor", ""))
+  // warnFrom/alertFrom were once busyFrom/hotFrom: read the old key as the
+  // fallback so an existing bar entry keeps its thresholds and colours, and
+  // snap to the stepper's marks (an old 16 lands on 15, not 16).
+  readonly property int warnFrom: Model.clampStep(setting("warnFrom", setting("busyFrom", 50)), 5, 100, 5, 50)
+  readonly property int alertFrom: Model.clampStep(setting("alertFrom", setting("hotFrom", 85)), 5, 100, 5, 85)
+  readonly property string warnColor: String(setting("warnColor", setting("busyColor", "")))
+  readonly property string alertColor: String(setting("alertColor", setting("hotColor", "")))
   readonly property int topCount: Model.clampInt(setting("topCount", 5), 1, 10, 5)
 
   // ---- Derived.
@@ -84,8 +87,17 @@ Panel {
     root.showPower && root.powerW !== null ? Model.wattsShort(root.powerW) : "",
     root.showVram && root.memUsedMiB !== null ? Model.mibShort(root.memUsedMiB) : ""
   ])
-  readonly property string tierColor: Model.loadColor(root.load, root.busyFrom, root.hotFrom,
-                                                      root.busyColor, root.hotColor)
+  // Same shape as barText but with every field at its widest, so the pill
+  // can reserve a stable column and stop shuffling its neighbours every
+  // time a reading crosses 9 -> 10 -> 100.
+  readonly property string barWidest: Model.barText([
+    root.showLoad ? "100%" : "",
+    root.showTemp && root.tempC !== null ? "100\u00b0" : "",
+    root.showPower && root.powerW !== null ? "999W" : "",
+    root.showVram && root.memUsedMiB !== null ? "99.9G" : ""
+  ])
+  readonly property string tierColor: Model.loadColor(root.load, root.warnFrom, root.alertFrom,
+                                                      root.warnColor, root.alertColor)
   readonly property string metaText: {
     var bits = []
     if (root.vendor !== "") bits.push(root.vendor)
@@ -128,10 +140,10 @@ Panel {
   function setShowVram(v) { persistSettings({ showVram: !!v }) }
   function setTemperatureUnit(v) { persistSettings({ temperatureUnit: Model.normalizeUnit(v) }) }
   function setHistorySamples(v) { persistSettings({ historySamples: Model.clampInt(v, 20, 240, 60) }) }
-  function setBusyFrom(v) { persistSettings({ busyFrom: Model.clampInt(v, 1, 100, 50) }) }
-  function setHotFrom(v) { persistSettings({ hotFrom: Model.clampInt(v, 1, 100, 85) }) }
-  function setBusyColor(hex) { persistSettings({ busyColor: String(hex) }) }
-  function setHotColor(hex) { persistSettings({ hotColor: String(hex) }) }
+  function setWarnFrom(v) { persistSettings({ warnFrom: Model.clampStep(v, 5, 100, 5, 50) }) }
+  function setAlertFrom(v) { persistSettings({ alertFrom: Model.clampStep(v, 5, 100, 5, 85) }) }
+  function setWarnColor(hex) { persistSettings({ warnColor: String(hex) }) }
+  function setAlertColor(hex) { persistSettings({ alertColor: String(hex) }) }
 
   function refresh() { if (!statusProc.running) statusProc.running = true }
   function refreshThemeColors() { if (!themeProc.running) themeProc.running = true }
@@ -533,11 +545,11 @@ Panel {
           PanelSeparator { width: parent.width; foreground: root.barForeground }
 
           // ---------- Load colours ----------
-          PanelSectionHeader { text: "LOAD COLORS"; foreground: root.barForeground }
+          PanelSectionHeader { text: "WARNING & ALERT"; foreground: root.barForeground }
 
           Text {
             width: parent.width
-            text: "The pill and the hero mark change color once load passes each mark. ∅ keeps the normal bar color."
+            text: "The pill and the hero mark change color once load passes the warning and alert marks. ∅ keeps the normal bar color."
             color: Qt.darker(root.barForeground, 1.4)
             font.family: Style.font.family
             font.pixelSize: Style.font.bodySmall
@@ -550,7 +562,7 @@ Panel {
 
             Text {
               anchors.verticalCenter: parent.verticalCenter
-              text: "Busy from"
+              text: "Warning from"
               color: Qt.darker(root.barForeground, 1.4)
               font.family: Style.font.family
               font.pixelSize: Style.font.bodySmall
@@ -558,14 +570,15 @@ Panel {
 
             NumberField {
               label: ""
-              value: root.busyFrom
-              from: 1
+              value: root.warnFrom
+              // Steps land on multiples of 5, not 1/6/11.
+              from: 5
               to: 100
               stepSize: 5
               foreground: root.barForeground
               accent: Color.accent
               field.editable: false
-              onModified: function(value) { root.setBusyFrom(value) }
+              onModified: function(value) { root.setWarnFrom(value) }
             }
 
             Text {
@@ -580,9 +593,9 @@ Panel {
           SwatchRow {
             width: parent.width
             choices: root.colorChoices
-            selected: root.busyColor
+            selected: root.warnColor
             foreground: root.barForeground
-            onPicked: function(hex) { root.setBusyColor(hex) }
+            onPicked: function(hex) { root.setWarnColor(hex) }
           }
 
           Row {
@@ -591,7 +604,7 @@ Panel {
 
             Text {
               anchors.verticalCenter: parent.verticalCenter
-              text: "Hot from"
+              text: "Alert from"
               color: Qt.darker(root.barForeground, 1.4)
               font.family: Style.font.family
               font.pixelSize: Style.font.bodySmall
@@ -599,14 +612,14 @@ Panel {
 
             NumberField {
               label: ""
-              value: root.hotFrom
-              from: 1
+              value: root.alertFrom
+              from: 5
               to: 100
               stepSize: 5
               foreground: root.barForeground
               accent: Color.accent
               field.editable: false
-              onModified: function(value) { root.setHotFrom(value) }
+              onModified: function(value) { root.setAlertFrom(value) }
             }
 
             Text {
@@ -621,9 +634,9 @@ Panel {
           SwatchRow {
             width: parent.width
             choices: root.colorChoices
-            selected: root.hotColor
+            selected: root.alertColor
             foreground: root.barForeground
-            onPicked: function(hex) { root.setHotColor(hex) }
+            onPicked: function(hex) { root.setAlertColor(hex) }
           }
         }
       }

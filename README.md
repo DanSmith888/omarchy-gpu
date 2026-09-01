@@ -43,8 +43,10 @@ omarchy plugin remove dansmith888.gpu
 
 ## Using it
 
-**Left-click** the pill to open the panel. **Middle-click** forces a
-refresh. Esc closes. To open it from a hotkey:
+**Left-click** the pill to open the panel. **Middle-click** opens `btop`,
+reusing an existing btop window rather than stacking up terminals. **Hover**
+for the card name and full readings. Esc closes. To open the panel from a
+hotkey:
 
 ```bash
 omarchy-shell shell toggle dansmith888.gpu
@@ -60,7 +62,7 @@ omarchy-shell shell toggle dansmith888.gpu
 | **Sensors** | Temperature, fan, core and memory clocks, performance state |
 | **Using the GPU** | Processes holding GPU memory, biggest first (NVIDIA only) |
 | **In the bar** | Which readings the pill shows, card picker, refresh rate, °C/°F, graph history |
-| **Load colors** | Two thresholds and a color each, taken from your live Omarchy theme |
+| **Warning & alert** | Two thresholds and a color each, taken from your live Omarchy theme; the pill and hero mark follow them |
 
 Settings are stored inline on the widget's `~/.config/omarchy/shell.json`
 entry and apply immediately.
@@ -86,6 +88,7 @@ readings that are real.
 - NVIDIA: `nvidia-utils` (for `nvidia-smi`)
 - AMD / Intel: nothing — the kernel already exposes what's needed
 - `pciutils` for the card's marketing name on AMD and Intel
+- `btop`, only for the middle-click shortcut
 
 ## Command line
 
@@ -103,6 +106,11 @@ gpuctl doctor                check every link from the driver to the bar
 - Multi-GPU machines get a card picker in the panel; the pill follows it.
 - An idle card usually parks its clock and fan, so low numbers there are
   the card working correctly, not a bad reading.
+- The pill reserves the width of its widest reading
+  (`100% 100° 999W 99.9G`), so nothing in the bar shifts as digits come and
+  go.
+- The warning and alert thresholds were once called busy and hot; an
+  existing bar entry keeps its old `busyFrom`/`hotColor` values.
 
 ## What runs, and as whom
 
