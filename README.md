@@ -11,8 +11,9 @@ NVIDIA is read through `nvidia-smi`; AMD and Intel through
 `/sys/class/drm`. Anything a driver doesn't report is hidden rather than
 guessed at. No daemon, no root, no network.
 
-<!-- ![Bar](docs/bar.png) -->
-<!-- ![Panel](docs/panel.png) -->
+![The trio in the bar](docs/bar.png)
+
+![The panel](docs/panel.png)
 
 ## Install
 
@@ -118,6 +119,25 @@ Omarchy plugins run inside the shell process, unsandboxed, as your user.
 This one runs two Python scripts from its own `bin/` — standard library
 only, no extra packages, no network, nothing that needs root. It shells out
 to `nvidia-smi` and `lspci` (both read-only) and writes nothing at all.
+
+## Related
+
+One of a trio that share a panel layout, controls and keybinds, so they read
+as one thing in the bar:
+
+- [omarchy-cpu](https://github.com/DanSmith888/omarchy-cpu) — load, cores,
+  temperature, memory, top processes
+- [omarchy-gpu](https://github.com/DanSmith888/omarchy-gpu) — load, VRAM,
+  power, sensors, GPU clients
+- [omarchy-network-speed](https://github.com/DanSmith888/omarchy-network-speed)
+  — download and upload, per-app bandwidth (a fork of
+  [csawy3r's plugin](https://github.com/csawy3r/omarchy-network-speed))
+
+## Credits
+
+The panel borrows its shape from Omarchy's own tailscale and network panels,
+and the history graph from
+[stappmus.activity-monitor](https://github.com/stappmus/omarchy-activity-monitor).
 
 ## Licence
 
