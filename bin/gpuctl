@@ -20,7 +20,9 @@ import glob
 import json
 import os
 import re
+import select
 import shutil
+import time
 import subprocess
 import sys
 
@@ -30,6 +32,9 @@ REQUIRED_FILES = ("manifest.json", "BarWidget.qml", "Panel.qml", "Model.js",
                   "Sparkline.qml", "bin/gpustatus", "bin/gpuctl")
 
 TIMEOUT = 4
+# Ceiling on what any one command may hand back. nvidia-smi -q grows with the
+# number of GPU clients, and this is parsed inside the shell process.
+MAX_OUTPUT = 262144
 # A process name is whatever a local program chose to call itself, and it ends
 # up in the panel and in the bar's tooltip, which renders with a Text that
 # auto-detects rich text. Keep a conservative printable subset so a name can
@@ -54,12 +59,57 @@ NV_FIELDS = [
 ]
 
 
-def run(cmd, timeout=TIMEOUT):
-    """stdout on success, None on any failure. Never raises, never hangs."""
+def run(cmd, timeout=TIMEOUT, limit=MAX_OUTPUT):
+    """stdout on success, None on any failure. Never raises, never hangs.
+
+    Reads at most `limit` bytes, and enforces `timeout` across the whole read
+    rather than only around process exit: a command that produces nothing and
+    never exits would otherwise block the caller for as long as it liked.
+    nvidia-smi -q grows with the number of GPU clients, and this runs inside
+    the shell process on a timer, so both bounds matter.
+    """
+    proc = None
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-        return r.stdout if r.returncode == 0 else None
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE,
+                                stderr=subprocess.DEVNULL)
+        fd = proc.stdout.fileno()
+        deadline = time.monotonic() + timeout
+        chunks, total, truncated = [], 0, False
+        while total < limit:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            if not select.select([fd], [], [], remaining)[0]:
+                break
+            chunk = os.read(fd, min(65536, limit - total))
+            if not chunk:
+                break
+            chunks.append(chunk)
+            total += len(chunk)
+        else:
+            truncated = True
+
+        proc.stdout.close()
+        try:
+            rc = proc.wait(timeout=0.5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=1)
+            rc = None
+
+        if not chunks:
+            return None
+        # Truncated output is still worth parsing; output from a command that
+        # failed outright is not.
+        if rc == 0 or truncated:
+            return b"".join(chunks).decode("utf-8", "replace")
+        return None
     except Exception:
+        if proc is not None:
+            try:
+                proc.kill()
+            except Exception:
+                pass
         return None
 
 
