@@ -181,5 +181,14 @@ function tooltip(title, rows) {
   var out = [title]
   for (var j = 0; j < list.length; j++)
     out.push(padRight(list[j][0], w) + "   " + String(list[j][1]))
+
+  // The bar centres every line of a tooltip independently, which leaves the
+  // label column ragged no matter how the labels are padded. Padding each
+  // line out to the same length makes centring indistinguishable from left
+  // alignment, so the columns line up. (Relies on the tooltip's monospace
+  // font, which is the bar's own.)
+  var line = 0
+  for (var k = 0; k < out.length; k++) line = Math.max(line, out[k].length)
+  for (var n = 0; n < out.length; n++) out[n] = padRight(out[n], line)
   return out.join("\n")
 }
