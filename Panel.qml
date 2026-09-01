@@ -142,6 +142,7 @@ Panel {
   function setShowVram(v) { persistSettings({ showVram: !!v }) }
   function setTemperatureUnit(v) { persistSettings({ temperatureUnit: Model.normalizeUnit(v) }) }
   function setHistorySamples(v) { persistSettings({ historySamples: Model.clampInt(v, 20, 240, 60) }) }
+  function setPillWidth(v) { persistSettings({ pillWidth: Model.clampInt(v, 0, 400, 0) }) }
   function setWarnFrom(v) { persistSettings({ warnFrom: Model.clampStep(v, 5, 100, 5, 50) }) }
   function setAlertFrom(v) { persistSettings({ alertFrom: Model.clampStep(v, 5, 100, 5, 85) }) }
   function setWarnColor(hex) { persistSettings({ warnColor: String(hex) }) }
