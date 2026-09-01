@@ -63,6 +63,7 @@ omarchy-shell shell toggle dansmith888.gpu
 | **Sensors** | Temperature, fan, core and memory clocks, performance state |
 | **Using the GPU** | Processes holding GPU memory, biggest first (NVIDIA only) |
 | **In the bar** | Which readings the pill shows, card picker, refresh rate, °C/°F, graph history |
+| **Layout** | Pin the pill to a fixed width, or leave it to size itself |
 | **Warning & alert** | Two thresholds and a color each, taken from your live Omarchy theme; the pill and hero mark follow them |
 
 Settings are stored inline on the widget's `~/.config/omarchy/shell.json`

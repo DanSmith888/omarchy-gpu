@@ -1,5 +1,5 @@
 <!--
-Marketplace submission for https://plugins.omarchy.org — unsubmitted draft.
+Marketplace submission for https://plugins.omarchy.org — UNSUBMITTED DRAFT.
 Before submitting: push the repo and tag v1.0.0, strip this comment, then:
 
   gh issue create --repo HANCORE-linux/omarchy-plugin-marketplace \
@@ -24,19 +24,19 @@ _No response_
 
 ### Maintainer notes
 
-GPU load, VRAM, temperature and power in the bar; a load graph, VRAM and power
-meters, every sensor the driver reports and the processes holding GPU memory in
-the panel. Multi-GPU machines get a card picker. Middle-click drops into btop.
+Load, VRAM, temperature and power in the bar; in the panel a load graph, VRAM
+and power meters, every sensor the driver reports, and the processes holding
+GPU memory. Multi-GPU machines get a card picker. Middle-click opens btop.
 
 NVIDIA is read through `nvidia-smi`; AMD and Intel through `/sys/class/drm` and
 their hwmon nodes. Anything a driver does not report is hidden rather than
 guessed at, so the panel only ever shows real readings. Two standard-library
 Python scripts in `bin/`; the only external commands are `nvidia-smi` and
 `lspci`, both read-only. No daemon, no root, no network, and nothing written
-outside the plugin folder — `omarchy plugin remove` is a clean uninstall.
+outside the plugin folder.
 
-Developed and tested against an NVIDIA card. The AMD and Intel paths are
-written to the documented sysfs contract but are not exercised on my hardware.
+Developed and tested against an NVIDIA card. The AMD and Intel paths follow the
+documented sysfs contract but are not exercised on my hardware.
 
 One of a trio with omarchy-cpu and omarchy-network-speed, which share the same
 panel layout and controls.
