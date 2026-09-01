@@ -35,6 +35,19 @@ TIMEOUT = 4
 # Ceiling on what any one command may hand back. nvidia-smi -q grows with the
 # number of GPU clients, and this is parsed inside the shell process.
 MAX_OUTPUT = 262144
+TOP_DEFAULT = 5
+# Longest process name we hand to the UI; anything longer is a command line,
+# not a name.
+NAME_MAX = 24
+# Hard cardinality caps. nvidia-smi output is trusted only as far as these:
+# every accepted GPU row costs two further commands, so the row count is
+# bounded before any per-GPU work starts.
+MAX_GPUS = 8
+MAX_PROCS_PER_GPU = 32
+FIELD_MAX = 64
+# Ceiling on any single /proc or /sys read.
+MAX_FILE_BYTES = 65536
+
 # A process name is whatever a local program chose to call itself, and it ends
 # up in the panel and in the bar's tooltip, which renders with a Text that
 # auto-detects rich text. Keep a conservative printable subset so a name can
@@ -42,13 +55,9 @@ MAX_OUTPUT = 262144
 _NAME_OK = re.compile(r"[^A-Za-z0-9 ._+@:-]")
 
 
-def safe_name(value):
-    out = _NAME_OK.sub("", str(value or ""))[:NAME_MAX].strip()
+def safe_name(value, limit=NAME_MAX):
+    out = _NAME_OK.sub("", str(value or ""))[:limit].strip()
     return out or "?"
-TOP_DEFAULT = 5
-# Longest process name we hand to the UI; anything longer is a command line,
-# not a name.
-NAME_MAX = 24
 
 # One nvidia-smi call for everything the panel shows.
 NV_FIELDS = [
@@ -114,9 +123,14 @@ def run(cmd, timeout=TIMEOUT, limit=MAX_OUTPUT):
 
 
 def read(path):
+    """File contents, capped. Never raises.
+
+    Bounded because a sysfs or proc path can be replaced with something much
+    larger, and this runs on a timer inside the shell process.
+    """
     try:
         with open(path) as f:
-            return f.read()
+            return f.read(MAX_FILE_BYTES)
     except OSError:
         return None
 
@@ -160,6 +174,8 @@ def nvidia_list():
         return []
     gpus = []
     for line in out.strip().splitlines():
+        if len(gpus) >= MAX_GPUS:
+            break
         parts = [p.strip() for p in line.split(",")]
         if len(parts) < len(NV_FIELDS):
             continue
@@ -167,8 +183,8 @@ def nvidia_list():
         gpus.append({
             "vendor": "NVIDIA",
             "index": to_num(f["index"]) or 0,
-            "name": f["name"],
-            "driver": f["driver_version"] or None,
+            "name": safe_name(f["name"], FIELD_MAX),
+            "driver": safe_name(f["driver_version"], FIELD_MAX) if f["driver_version"] else None,
             "load": to_num(f["utilization.gpu"]),
             "memLoad": to_num(f["utilization.memory"]),
             "memUsedMiB": to_num(f["memory.used"]),
@@ -180,14 +196,17 @@ def nvidia_list():
             "maxClockMhz": to_num(f["clocks.max.gr"]),
             "memClockMhz": to_num(f["clocks.mem"]),
             "fanPct": to_num(f["fan.speed"]),
-            "pstate": f["pstate"] or None,
+            "pstate": safe_name(f["pstate"], 8) if f["pstate"] else None,
         })
     return gpus
 
 
 def nvidia_processes(index, top_n=TOP_DEFAULT):
     """[{pid, name, memMiB}] — graphics and compute clients, biggest first."""
-    out = run(["nvidia-smi", "--query-compute-apps=pid,used_memory",
+    # -i scopes both queries to one card. Without it every GPU on a
+    # multi-GPU machine was handed the same client list.
+    gpu = str(int(index))
+    out = run(["nvidia-smi", "-i", gpu, "--query-compute-apps=pid,used_memory",
                "--format=csv,noheader,nounits"])
     procs = {}
     if out:
@@ -201,7 +220,7 @@ def nvidia_processes(index, top_n=TOP_DEFAULT):
             procs[int(pid)] = to_num(parts[-1]) or 0
 
     # -q -d PIDS also lists graphics clients, which the query API omits.
-    out = run(["nvidia-smi", "-q", "-d", "PIDS"])
+    out = run(["nvidia-smi", "-i", gpu, "-q", "-d", "PIDS"])
     if out:
         pid = None
         for line in out.splitlines():
@@ -220,7 +239,7 @@ def nvidia_processes(index, top_n=TOP_DEFAULT):
         if name:
             out_list.append({"pid": pid, "name": name, "memMiB": mem})
     out_list.sort(key=lambda p: (-(p["memMiB"] or 0), p["pid"]))
-    return out_list[:top_n]
+    return out_list[:min(top_n, MAX_PROCS_PER_GPU)]
 
 
 def proc_name(pid):
@@ -328,7 +347,7 @@ def gpu_name(dev, vendor, driver):
             name = m.group(1)
             name = re.sub(r"^(VGA compatible controller|3D controller|Display controller):\s*", "", name)
             name = re.sub(r"\s*\(rev [0-9a-f]+\)$", "", name)
-            return name.strip()
+            return safe_name(name, FIELD_MAX)
     return f"{vendor} GPU ({driver})"
 
 
@@ -338,12 +357,13 @@ def list_gpus(top_n=TOP_DEFAULT):
     gpus = nvidia_list()
     for g in gpus:
         g["processes"] = nvidia_processes(g["index"], top_n)
+    gpus = gpus[:MAX_GPUS]
     sys_gpus = sysfs_list()
     for g in sys_gpus:
         # No per-process VRAM accounting outside NVIDIA; null hides the list.
         g["processes"] = None
     gpus.extend(sys_gpus)
-    return gpus
+    return gpus[:MAX_GPUS]
 
 
 def get(index=0, top_n=TOP_DEFAULT):
@@ -358,7 +378,8 @@ def get(index=0, top_n=TOP_DEFAULT):
     state = dict(pick)
     state["present"] = True
     state["count"] = len(gpus)
-    state["gpus"] = [{"index": g["index"], "name": g["name"], "vendor": g["vendor"]} for g in gpus]
+    state["gpus"] = [{"index": g["index"], "name": g["name"], "vendor": g["vendor"]}
+                     for g in gpus[:MAX_GPUS]]
     return state
 
 

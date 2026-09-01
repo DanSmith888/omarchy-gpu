@@ -129,6 +129,24 @@ function powerPercent(draw, limit) {
   return 100 * draw / limit
 }
 
+// The producer already caps these, but the panel enforces its own schema
+// limits rather than trusting whatever arrives: a consumer that believes its
+// input is the same bug one layer up.
+var MAX_GPUS = 8
+var MAX_PROCS = 32
+var FIELD_MAX = 64
+
+function capArray(list, limit) {
+  if (!list || !list.length) return []
+  return list.slice(0, limit)
+}
+
+function capText(value, limit) {
+  if (value === null || value === undefined) return ""
+  var s = String(value)
+  return s.length > (limit || FIELD_MAX) ? s.slice(0, limit || FIELD_MAX) : s
+}
+
 // ---- colours ------------------------------------------------------------
 
 // Load band colour: "" (normal) below the warning mark, warnColor from the

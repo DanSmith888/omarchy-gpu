@@ -192,9 +192,9 @@ Panel {
           if (d.present !== true) { root.devicePresent = false; return }
           root.devicePresent = true
           root.stale = false
-          root.vendor = d.vendor || ""
-          root.name = d.name || ""
-          root.driver = d.driver !== undefined ? d.driver : null
+          root.vendor = Model.capText(d.vendor, 32)
+          root.name = Model.capText(d.name, Model.FIELD_MAX)
+          root.driver = d.driver ? Model.capText(d.driver, Model.FIELD_MAX) : null
           root.load = (typeof d.load === "number") ? d.load : null
           root.memUsedMiB = (typeof d.memUsedMiB === "number") ? d.memUsedMiB : null
           root.memTotalMiB = (typeof d.memTotalMiB === "number") ? d.memTotalMiB : null
@@ -205,9 +205,17 @@ Panel {
           root.maxClockMhz = (typeof d.maxClockMhz === "number") ? d.maxClockMhz : null
           root.memClockMhz = (typeof d.memClockMhz === "number") ? d.memClockMhz : null
           root.fanPct = (typeof d.fanPct === "number") ? d.fanPct : null
-          root.pstate = d.pstate || null
-          root.processes = d.processes || null
-          root.gpus = d.gpus || []
+          root.pstate = d.pstate ? Model.capText(d.pstate, 8) : null
+          root.processes = d.processes
+            ? Model.capArray(d.processes, Model.MAX_PROCS).map(function(p) {
+                return { pid: p.pid, memMiB: p.memMiB,
+                         name: Model.capText(p.name, Model.FIELD_MAX) }
+              })
+            : null
+          root.gpus = Model.capArray(d.gpus, Model.MAX_GPUS).map(function(g) {
+            return { index: g.index, vendor: Model.capText(g.vendor, 32),
+                     name: Model.capText(g.name, Model.FIELD_MAX) }
+          })
           root.loadHistory = Model.pushHistory(root.loadHistory, root.load, root.historySamples)
         } catch (e) {
           // Keep the last good reading rather than blanking the pill.
