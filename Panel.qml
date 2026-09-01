@@ -69,6 +69,7 @@ Panel {
   readonly property int alertFrom: Model.clampStep(setting("alertFrom", setting("hotFrom", 85)), 5, 100, 5, 85)
   readonly property string warnColor: String(setting("warnColor", setting("busyColor", "")))
   readonly property string alertColor: String(setting("alertColor", setting("hotColor", "")))
+  readonly property int pillWidth: Model.clampInt(setting("pillWidth", 0), 0, 400, 0)
   readonly property int topCount: Model.clampInt(setting("topCount", 5), 1, 10, 5)
 
   // ---- Derived.
@@ -106,6 +107,7 @@ Panel {
     return bits.join(" · ")
   }
   readonly property var refreshChips: [
+    { value: "500", label: "0.5s" },
     { value: "1000", label: "1s" },
     { value: "2000", label: "2s" },
     { value: "3000", label: "3s" },
@@ -544,6 +546,31 @@ Panel {
 
           PanelSeparator { width: parent.width; foreground: root.barForeground }
 
+          PanelSectionHeader { text: "LAYOUT"; foreground: root.barForeground }
+
+          Text {
+            width: parent.width
+            text: "Width of the reading in pixels. 0 fits the reading and holds that width so the bar stays still."
+            color: Qt.darker(root.barForeground, 1.4)
+            font.family: Style.font.family
+            font.pixelSize: Style.font.bodySmall
+            wrapMode: Text.WordWrap
+          }
+
+          NumberField {
+            label: ""
+            value: root.pillWidth
+            from: 0
+            to: 400
+            stepSize: 2
+            foreground: root.barForeground
+            accent: Color.accent
+            field.editable: false
+            onModified: function(value) { root.setPillWidth(value) }
+          }
+
+          PanelSeparator { width: parent.width; foreground: root.barForeground }
+
           // ---------- Load colours ----------
           PanelSectionHeader { text: "WARNING & ALERT"; foreground: root.barForeground }
 
@@ -654,9 +681,12 @@ Panel {
 
     Row {
       width: meter.width
+      spacing: Style.space(8)
 
       Text {
-        width: meter.width - meterValue.width
+        // Floor it: a fractional remainder rounds the value text past the
+        // panel edge and clips its last character.
+        width: Math.floor(meter.width - meterValue.width - parent.spacing)
         text: meter.label
         color: Qt.darker(root.barForeground, 1.4)
         font.family: Style.font.family
