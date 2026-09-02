@@ -1,9 +1,10 @@
-# Gpu — Omarchy plugin
+# GPU: development notes
 
 GPU load, VRAM, temperature and power in the Omarchy bar
 
-Read the `omarchy-plugin-dev` skill first; it holds the conventions. This
-file holds only what is specific to this repo.
+Human development notes for this repo. Deliberately not named CLAUDE.md: an
+installed plugin tree can be read by coding agents, and an agent-instruction
+filename in a distributed package is a prompt-injection surface.
 
 ## Identity
 
