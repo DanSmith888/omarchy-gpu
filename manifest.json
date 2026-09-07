@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "dansmith888.gpu",
   "name": "GPU",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "Daniel Smith",
   "license": "MIT",
-  "description": "GPU load, VRAM, temperature, power and clocks in the Omarchy bar",
+  "description": "GPU load, VRAM, temperature, power and clocks in the Omarchy bar. Pairs with my CPU and Bandwidth plugins: click @DanSmith888 to see all three",
   "kinds": [
     "bar-widget"
   ],

@@ -1,7 +1,7 @@
 # GPU
 
 GPU load, VRAM, temperature and power in the [Omarchy](https://omarchy.org/)
-bar.
+bar. Pairs with the CPU and Bandwidth widgets.
 
 ![Bar](docs/bar.png)
 
@@ -92,6 +92,13 @@ Omarchy plugins run inside the shell process, unsandboxed, as your user. This
 one runs two Python scripts from its own `bin/`: standard library only, no
 extra packages, no network, nothing needing root. It shells out to `nvidia-smi`
 and `lspci`, both read only, and writes nothing at all.
+
+## Related
+
+I built this alongside two companions that share the same panel style:
+[CPU](https://github.com/DanSmith888/omarchy-cpu) (load, per-core activity, temperature and clock) and
+[Bandwidth](https://github.com/DanSmith888/omarchy-bandwidth) (live download and upload with per-app bandwidth).
+Each installs the same way and they sit well side by side in the bar.
 
 ## Credits
 

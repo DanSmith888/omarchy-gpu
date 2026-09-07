@@ -297,13 +297,13 @@ Panel {
             title: root.shortModel
             meta: root.metaText
             detail: root.loadText
-            foreground: root.barForeground
+            foreground: Color.popups.text
             fontFamily: Style.font.family
             iconComponent: Component {
               Text {
                 textFormat: Text.PlainText
                 text: "󰢮"
-                color: root.tierColor !== "" ? root.tierColor : root.barForeground
+                color: root.tierColor !== "" ? root.tierColor : Color.popups.text
                 font.family: Style.font.family
                 font.pixelSize: Style.font.display
               }
@@ -345,10 +345,10 @@ Panel {
             fill: Color.accent
           }
 
-          PanelSeparator { width: parent.width; foreground: root.barForeground }
+          PanelSeparator { width: parent.width; foreground: Color.popups.text }
 
           // ---------- Sensors ----------
-          PanelSectionHeader { text: "SENSORS"; foreground: root.barForeground }
+          PanelSectionHeader { text: "SENSORS"; foreground: Color.popups.text }
 
           StatRow {
             width: parent.width
@@ -389,14 +389,14 @@ Panel {
 
           PanelSeparator {
             width: parent.width
-            foreground: root.barForeground
+            foreground: Color.popups.text
             visible: root.processes !== null
           }
 
           // ---------- Clients ----------
           PanelSectionHeader {
             text: "USING THE GPU"
-            foreground: root.barForeground
+            foreground: Color.popups.text
             visible: root.processes !== null
           }
 
@@ -406,7 +406,7 @@ Panel {
             width: parent.width
             visible: root.processes !== null && root.processes.length === 0
             text: "Nothing is holding GPU memory right now."
-            color: Qt.darker(root.barForeground, 1.4)
+            color: Qt.darker(Color.popups.text, 1.4)
             font.family: Style.font.family
             font.pixelSize: Style.font.bodySmall
           }
@@ -424,7 +424,7 @@ Panel {
                 textFormat: Text.PlainText
                 width: procRow.width - procValue.width - procRow.spacing
                 text: procRow.modelData.name + "  (" + procRow.modelData.pid + ")"
-                color: Qt.darker(root.barForeground, 1.3)
+                color: Qt.darker(Color.popups.text, 1.3)
                 font.family: Style.font.family
                 font.pixelSize: Style.font.bodySmall
                 elide: Text.ElideRight
@@ -435,24 +435,24 @@ Panel {
                 textFormat: Text.PlainText
                 id: procValue
                 text: Model.mib(procRow.modelData.memMiB)
-                color: root.barForeground
+                color: Color.popups.text
                 font.family: Style.font.family
                 font.pixelSize: Style.font.bodySmall
               }
             }
           }
 
-          PanelSeparator { width: parent.width; foreground: root.barForeground }
+          PanelSeparator { width: parent.width; foreground: Color.popups.text }
 
           // ---------- Bar pill ----------
-          PanelSectionHeader { text: "IN THE BAR"; foreground: root.barForeground }
+          PanelSectionHeader { text: "IN THE BAR"; foreground: Color.popups.text }
 
           Text {
 
             textFormat: Text.PlainText
             width: parent.width
             text: "Pick what the pill shows. Everything stays visible in here either way."
-            color: Qt.darker(root.barForeground, 1.4)
+            color: Qt.darker(Color.popups.text, 1.4)
             font.family: Style.font.family
             font.pixelSize: Style.font.bodySmall
             wrapMode: Text.WordWrap
@@ -463,7 +463,7 @@ Panel {
             label: "Card icon"
             description: "󰢮 in front of the readings."
             checked: root.showIcon
-            foreground: root.barForeground
+            foreground: Color.popups.text
             accent: Color.accent
             fontFamily: Style.font.family
             onClicked: root.setShowIcon(!root.showIcon)
@@ -475,7 +475,7 @@ Panel {
             label: "Load"
             description: "GPU utilisation as a percentage."
             checked: root.showLoad
-            foreground: root.barForeground
+            foreground: Color.popups.text
             accent: Color.accent
             fontFamily: Style.font.family
             onClicked: root.setShowLoad(!root.showLoad)
@@ -487,7 +487,7 @@ Panel {
             label: "Temperature"
             description: "Core temperature in whole degrees."
             checked: root.showTemp
-            foreground: root.barForeground
+            foreground: Color.popups.text
             accent: Color.accent
             fontFamily: Style.font.family
             onClicked: root.setShowTemp(!root.showTemp)
@@ -499,7 +499,7 @@ Panel {
             label: "Power"
             description: "Board power draw in watts."
             checked: root.showPower
-            foreground: root.barForeground
+            foreground: Color.popups.text
             accent: Color.accent
             fontFamily: Style.font.family
             onClicked: root.setShowPower(!root.showPower)
@@ -511,7 +511,7 @@ Panel {
             label: "VRAM"
             description: "Video memory in use."
             checked: root.showVram
-            foreground: root.barForeground
+            foreground: Color.popups.text
             accent: Color.accent
             fontFamily: Style.font.family
             onClicked: root.setShowVram(!root.showVram)
@@ -523,7 +523,7 @@ Panel {
             width: parent.width
             visible: root.gpus.length > 1
             text: "Card"
-            color: Qt.darker(root.barForeground, 1.4)
+            color: Qt.darker(Color.popups.text, 1.4)
             font.family: Style.font.family
             font.pixelSize: Style.font.bodySmall
           }
@@ -532,7 +532,7 @@ Panel {
             visible: root.gpus.length > 1
             value: String(root.gpuIndex)
             options: root.gpuChips
-            foreground: root.barForeground
+            foreground: Color.popups.text
             background: Color.background
             accent: Color.accent
             fontFamily: Style.font.family
@@ -544,7 +544,7 @@ Panel {
             textFormat: Text.PlainText
             width: parent.width
             text: "Refresh interval"
-            color: Qt.darker(root.barForeground, 1.4)
+            color: Qt.darker(Color.popups.text, 1.4)
             font.family: Style.font.family
             font.pixelSize: Style.font.bodySmall
           }
@@ -552,7 +552,7 @@ Panel {
           ButtonGroup {
             value: String(root.pollIntervalMs)
             options: root.refreshChips
-            foreground: root.barForeground
+            foreground: Color.popups.text
             background: Color.background
             accent: Color.accent
             fontFamily: Style.font.family
@@ -565,7 +565,7 @@ Panel {
             width: parent.width
             visible: root.tempC !== null
             text: "Temperature unit"
-            color: Qt.darker(root.barForeground, 1.4)
+            color: Qt.darker(Color.popups.text, 1.4)
             font.family: Style.font.family
             font.pixelSize: Style.font.bodySmall
           }
@@ -574,7 +574,7 @@ Panel {
             visible: root.tempC !== null
             value: root.temperatureUnit
             options: root.unitChips
-            foreground: root.barForeground
+            foreground: Color.popups.text
             background: Color.background
             accent: Color.accent
             fontFamily: Style.font.family
@@ -586,7 +586,7 @@ Panel {
             textFormat: Text.PlainText
             width: parent.width
             text: "Graph history (samples)"
-            color: Qt.darker(root.barForeground, 1.4)
+            color: Qt.darker(Color.popups.text, 1.4)
             font.family: Style.font.family
             font.pixelSize: Style.font.bodySmall
           }
@@ -594,23 +594,23 @@ Panel {
           ButtonGroup {
             value: String(root.historySamples)
             options: root.historyChips
-            foreground: root.barForeground
+            foreground: Color.popups.text
             background: Color.background
             accent: Color.accent
             fontFamily: Style.font.family
             onChanged: function(value) { root.setHistorySamples(value) }
           }
 
-          PanelSeparator { width: parent.width; foreground: root.barForeground }
+          PanelSeparator { width: parent.width; foreground: Color.popups.text }
 
-          PanelSectionHeader { text: "LAYOUT"; foreground: root.barForeground }
+          PanelSectionHeader { text: "LAYOUT"; foreground: Color.popups.text }
 
           Text {
 
             textFormat: Text.PlainText
             width: parent.width
             text: "Width of the reading in pixels. 0 fits the reading and holds that width so the bar stays still."
-            color: Qt.darker(root.barForeground, 1.4)
+            color: Qt.darker(Color.popups.text, 1.4)
             font.family: Style.font.family
             font.pixelSize: Style.font.bodySmall
             wrapMode: Text.WordWrap
@@ -622,23 +622,23 @@ Panel {
             from: 0
             to: 400
             stepSize: 2
-            foreground: root.barForeground
+            foreground: Color.popups.text
             accent: Color.accent
             field.editable: false
             onModified: function(value) { root.setPillWidth(value) }
           }
 
-          PanelSeparator { width: parent.width; foreground: root.barForeground }
+          PanelSeparator { width: parent.width; foreground: Color.popups.text }
 
           // ---------- Load colours ----------
-          PanelSectionHeader { text: "WARNING & ALERT"; foreground: root.barForeground }
+          PanelSectionHeader { text: "WARNING & ALERT"; foreground: Color.popups.text }
 
           Text {
 
             textFormat: Text.PlainText
             width: parent.width
             text: "The pill and the hero mark change color once load passes the warning and alert marks. ∅ keeps the normal bar color."
-            color: Qt.darker(root.barForeground, 1.4)
+            color: Qt.darker(Color.popups.text, 1.4)
             font.family: Style.font.family
             font.pixelSize: Style.font.bodySmall
             wrapMode: Text.WordWrap
@@ -653,7 +653,7 @@ Panel {
               textFormat: Text.PlainText
               anchors.verticalCenter: parent.verticalCenter
               text: "Warning from"
-              color: Qt.darker(root.barForeground, 1.4)
+              color: Qt.darker(Color.popups.text, 1.4)
               font.family: Style.font.family
               font.pixelSize: Style.font.bodySmall
             }
@@ -665,7 +665,7 @@ Panel {
               from: 5
               to: 100
               stepSize: 5
-              foreground: root.barForeground
+              foreground: Color.popups.text
               accent: Color.accent
               field.editable: false
               onModified: function(value) { root.setWarnFrom(value) }
@@ -676,7 +676,7 @@ Panel {
               textFormat: Text.PlainText
               anchors.verticalCenter: parent.verticalCenter
               text: "%"
-              color: Qt.darker(root.barForeground, 1.4)
+              color: Qt.darker(Color.popups.text, 1.4)
               font.family: Style.font.family
               font.pixelSize: Style.font.bodySmall
             }
@@ -686,7 +686,7 @@ Panel {
             width: parent.width
             choices: root.colorChoices
             selected: root.warnColor
-            foreground: root.barForeground
+            foreground: Color.popups.text
             onPicked: function(hex) { root.setWarnColor(hex) }
           }
 
@@ -699,7 +699,7 @@ Panel {
               textFormat: Text.PlainText
               anchors.verticalCenter: parent.verticalCenter
               text: "Alert from"
-              color: Qt.darker(root.barForeground, 1.4)
+              color: Qt.darker(Color.popups.text, 1.4)
               font.family: Style.font.family
               font.pixelSize: Style.font.bodySmall
             }
@@ -710,7 +710,7 @@ Panel {
               from: 5
               to: 100
               stepSize: 5
-              foreground: root.barForeground
+              foreground: Color.popups.text
               accent: Color.accent
               field.editable: false
               onModified: function(value) { root.setAlertFrom(value) }
@@ -721,7 +721,7 @@ Panel {
               textFormat: Text.PlainText
               anchors.verticalCenter: parent.verticalCenter
               text: "%"
-              color: Qt.darker(root.barForeground, 1.4)
+              color: Qt.darker(Color.popups.text, 1.4)
               font.family: Style.font.family
               font.pixelSize: Style.font.bodySmall
             }
@@ -731,7 +731,7 @@ Panel {
             width: parent.width
             choices: root.colorChoices
             selected: root.alertColor
-            foreground: root.barForeground
+            foreground: Color.popups.text
             onPicked: function(hex) { root.setAlertColor(hex) }
           }
         }
@@ -759,7 +759,7 @@ Panel {
         // panel edge and clips its last character.
         width: Math.floor(meter.width - meterValue.width - parent.spacing)
         text: meter.label
-        color: Qt.darker(root.barForeground, 1.4)
+        color: Qt.darker(Color.popups.text, 1.4)
         font.family: Style.font.family
         font.pixelSize: Style.font.bodySmall
         elide: Text.ElideRight
@@ -770,7 +770,7 @@ Panel {
         textFormat: Text.PlainText
         id: meterValue
         text: meter.valueText
-        color: root.barForeground
+        color: Color.popups.text
         font.family: Style.font.family
         font.pixelSize: Style.font.bodySmall
         font.bold: true
@@ -781,7 +781,7 @@ Panel {
       width: meter.width
       height: Style.space(6)
       radius: height / 2
-      color: Qt.rgba(root.barForeground.r, root.barForeground.g, root.barForeground.b, 0.10)
+      color: Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.10)
 
       Rectangle {
         width: Math.round(parent.width * Math.max(0, Math.min(1, meter.value / 100)))
@@ -805,7 +805,7 @@ Panel {
       textFormat: Text.PlainText
       width: stat.width - statValue.width - stat.spacing
       text: stat.label
-      color: Qt.darker(root.barForeground, 1.4)
+      color: Qt.darker(Color.popups.text, 1.4)
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall
       elide: Text.ElideRight
@@ -816,7 +816,7 @@ Panel {
       textFormat: Text.PlainText
       id: statValue
       text: stat.value
-      color: root.barForeground
+      color: Color.popups.text
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall
     }
