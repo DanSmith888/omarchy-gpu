@@ -73,6 +73,13 @@ The process list merges compute clients with the graphics clients from
 `nvidia-smi -q -d PIDS`, so your compositor and browser show up, not just CUDA
 jobs.
 
+On hybrid laptops the NVIDIA card powers itself off when idle (runtime D3).
+Every `nvidia-smi` call would wake it, so the widget reads the power state
+from sysfs first and leaves a sleeping card alone: it shows `D3cold`, with the
+temperature from the embedded controller where the laptop exposes one. While
+the card is awake but none of your processes are using it, readings refresh
+at most once a minute so it can go back to sleep.
+
 Multi GPU machines get a card picker in the panel, and the pill follows it.
 
 An idle card parks its clock and fan, so low numbers there are the card working

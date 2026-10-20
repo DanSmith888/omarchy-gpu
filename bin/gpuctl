@@ -261,6 +261,200 @@ def proc_name(pid):
     return safe_name(comm) if comm else None
 
 
+# ---- NVIDIA runtime power management (RTD3) ------------------------------
+#
+# On hybrid laptops the NVIDIA GPU powers itself off (runtime D3 / D3cold)
+# after a few seconds without clients. Every nvidia-smi call is a client: it
+# opens /dev/nvidia*, wakes a suspended GPU, and restarts the idle timer. A
+# bar widget polling every few seconds therefore keeps the dGPU awake forever
+# (several watts, all day). So nvidia-smi only runs when the GPU is already
+# awake for a reason of its own; the power state itself comes from sysfs,
+# which never touches the device.
+
+# While awake with no client we can see (an idle timeout in progress, or a
+# root/container workload whose fds we cannot read), query at most this often
+# and serve the cached reading in between, so the GPU can still fall asleep.
+AWAKE_UNSEEN_QUERY_S = 60
+# pci.ids is ~40k lines; anything far beyond that is not the file we expect.
+PCI_IDS_MAX_LINES = 200000
+_NV_CLIENT_DEV = re.compile(r"^/dev/nvidia(\d+|-uvm)$")
+
+
+def _cache_path():
+    """Per-session cache file, or None: never fall back to a shared /tmp."""
+    base = os.environ.get("XDG_RUNTIME_DIR")
+    return os.path.join(base, "omarchy-gpu-nvidia.json") if base else None
+
+
+def _cache_load():
+    """(timestamp, [gpu dicts]) from the last nvidia-smi reading."""
+    path = _cache_path()
+    raw = read(path) if path else None
+    try:
+        data = json.loads(raw) if raw else {}
+        gpus = data.get("gpus") if isinstance(data, dict) else None
+        gpus = [g for g in gpus if isinstance(g, dict)][:MAX_GPUS] if isinstance(gpus, list) else []
+        return float(data.get("t", 0)), gpus
+    except (ValueError, TypeError, AttributeError):
+        return 0.0, []
+
+
+def _cache_save(t, gpus):
+    path = _cache_path()
+    if not path:
+        return
+    try:
+        tmp = path + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump({"t": t, "gpus": gpus}, f)
+        os.replace(tmp, path)
+    except OSError:
+        pass
+
+
+def nvidia_pci_power():
+    """[(slot, runtime_status)] for NVIDIA display-class PCI functions.
+
+    vendor/class are cached by the kernel and runtime_status is PM core
+    state: reading them never resumes the device.
+    """
+    out = []
+    for dev in sorted(glob.glob("/sys/bus/pci/devices/*")):
+        if (read(os.path.join(dev, "vendor")) or "").strip() != "0x10de":
+            continue
+        if not (read(os.path.join(dev, "class")) or "").strip().startswith("0x03"):
+            continue
+        status = (read(os.path.join(dev, "power", "runtime_status")) or "").strip()
+        out.append((os.path.basename(dev), status))
+    return out
+
+
+def nvidia_has_visible_client():
+    """True if a process we can inspect has an NVIDIA compute/render device open."""
+    me = os.getpid()
+    for d in glob.glob("/proc/[0-9]*"):
+        try:
+            pid = int(os.path.basename(d))
+        except ValueError:
+            continue
+        if pid == me or (read(os.path.join(d, "comm")) or "").strip() == "nvidia-smi":
+            continue
+        try:
+            fds = os.listdir(os.path.join(d, "fd"))
+        except OSError:
+            continue          # another user's process, or gone
+        for fd in fds:
+            try:
+                if _NV_CLIENT_DEV.match(os.readlink(os.path.join(d, "fd", fd))):
+                    return True
+            except OSError:
+                continue
+    return False
+
+
+def ec_gpu_temp():
+    """GPU temperature from a non-NVIDIA hwmon (e.g. legion_hwmon, via the EC)."""
+    for label in glob.glob("/sys/class/hwmon/hwmon*/temp*_label"):
+        if (read(os.path.join(os.path.dirname(label), "name")) or "").strip() == "nvidia":
+            continue
+        if (read(label) or "").strip().lower() == "gpu temperature":
+            milli = read_int(label[:-len("_label")] + "_input")
+            if milli is not None and 0 < milli < 150000:
+                return round(milli / 1000.0, 1)
+    return None
+
+
+def pci_ids_name(slot):
+    """'NVIDIA GeForce RTX 5090 Max-Q Mobile' from hwdata's pci.ids, or None.
+
+    Device ids come from sysfs (cached by the kernel), so unlike lspci this
+    never reads config space of a suspended device.
+    """
+    dev = (read(f"/sys/bus/pci/devices/{slot}/device") or "").strip().lower()
+    if not dev.startswith("0x"):
+        return None
+    want, in_vendor = dev[2:], False
+    for ids in ("/usr/share/hwdata/pci.ids", "/usr/share/misc/pci.ids"):
+        try:
+            with open(ids, encoding="utf-8", errors="replace") as f:
+                for n, line in enumerate(f):
+                    if n >= PCI_IDS_MAX_LINES:
+                        break
+                    if line.startswith("10de "):
+                        in_vendor = True
+                        continue
+                    if in_vendor and line[:1] not in ("\t", "#", "\n"):
+                        break
+                    if in_vendor and line.startswith("\t" + want + "  "):
+                        name = line.split("  ", 1)[1].strip()
+                        m = re.search(r"\[([^\]]+)\]", name)
+                        name = (m.group(1) if m else name).replace(" / ", " ")
+                        return safe_name("NVIDIA " + name, FIELD_MAX)
+        except OSError:
+            continue
+    return None
+
+
+def nvidia_sleeping(cached, power):
+    """Entries for a suspended GPU, built without touching it."""
+    driver = (read("/sys/module/nvidia/version") or "").strip() or None
+    temp = ec_gpu_temp()
+    gpus = []
+    for i, prev in enumerate(cached or [{"index": n} for n in range(len(power))]):
+        gpus.append({
+            "vendor": "NVIDIA",
+            "index": prev.get("index", i),
+            "name": prev.get("name") or (pci_ids_name(power[i][0]) if i < len(power) else None) or "NVIDIA GPU",
+            "driver": safe_name(driver, FIELD_MAX) if driver else prev.get("driver"),
+            "load": 0,
+            "memLoad": None,
+            "memUsedMiB": 0,
+            "memTotalMiB": prev.get("memTotalMiB"),
+            "tempC": temp,
+            "powerW": 0,
+            "powerLimitW": prev.get("powerLimitW"),
+            "clockMhz": None,
+            "maxClockMhz": prev.get("maxClockMhz"),
+            "memClockMhz": None,
+            "fanPct": None,
+            "pstate": "D3cold",
+            "processes": [],
+        })
+    return gpus
+
+
+def nvidia_gpus(top_n=TOP_DEFAULT):
+    """NVIDIA entries, querying nvidia-smi only when that cannot wake the GPU."""
+    if not nvidia_available():
+        return []
+    power = nvidia_pci_power()
+    statuses = {st for _, st in power}
+    cached_t, cached = _cache_load()
+    now = time.time()
+
+    if power and statuses <= {"suspended", "suspending"}:
+        gpus = nvidia_sleeping(cached, power)
+        if not cached:
+            # Remember the pci.ids name so it is looked up once, not per
+            # poll. t=0 keeps the awake path from treating this as fresh.
+            _cache_save(0, gpus)
+        return gpus
+
+    # "unsupported" (runtime PM off) or no PCI info: the GPU never sleeps, so
+    # polling costs nothing extra -- keep the original behaviour.
+    may_sleep = bool(power) and not statuses <= {"unsupported", ""}
+    if may_sleep and cached and not nvidia_has_visible_client():
+        if now - cached_t < AWAKE_UNSEEN_QUERY_S:
+            return cached
+
+    gpus = nvidia_list()
+    for g in gpus:
+        g["processes"] = nvidia_processes(g["index"], top_n)
+    if gpus:
+        _cache_save(now, gpus)
+    return gpus
+
+
 # ---- AMD / Intel via sysfs ---------------------------------------------
 
 def sysfs_hwmon(device_dir):
@@ -354,10 +548,7 @@ def gpu_name(dev, vendor, driver):
 # ---- assembly -----------------------------------------------------------
 
 def list_gpus(top_n=TOP_DEFAULT):
-    gpus = nvidia_list()
-    for g in gpus:
-        g["processes"] = nvidia_processes(g["index"], top_n)
-    gpus = gpus[:MAX_GPUS]
+    gpus = nvidia_gpus(top_n)[:MAX_GPUS]
     sys_gpus = sysfs_list()
     for g in sys_gpus:
         # No per-process VRAM accounting outside NVIDIA; null hides the list.
