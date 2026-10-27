@@ -74,11 +74,13 @@ The process list merges compute clients with the graphics clients from
 jobs.
 
 On hybrid laptops the NVIDIA card powers itself off when idle (runtime D3).
-Every `nvidia-smi` call would wake it, so the widget reads the power state
-from sysfs first and leaves a sleeping card alone: it shows `D3cold`, with the
-temperature from the embedded controller where the laptop exposes one. While
-the card is awake but none of your processes are using it, readings refresh
-at most once a minute so it can go back to sleep.
+Every `nvidia-smi` call would wake it, so where the card's `power/control` is
+`auto` the widget reads the power state from sysfs first and leaves a sleeping
+card alone: it shows `D3cold`, with the temperature from the embedded
+controller where the laptop exposes one. While the card is awake but none of
+your processes are using it, readings refresh at most every 20 s so it can go
+back to sleep. With `power/control` at `on` (typical on desktops) the card
+cannot sleep, and every poll takes a live reading as before.
 
 Multi GPU machines get a card picker in the panel, and the pill follows it.
 

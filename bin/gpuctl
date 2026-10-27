@@ -25,6 +25,7 @@ import shutil
 import time
 import subprocess
 import sys
+import tempfile
 
 PLUGIN_ID = "dansmith888.gpu"
 REPO_URL = "https://github.com/DanSmith888/omarchy-gpu.git"
@@ -271,10 +272,14 @@ def proc_name(pid):
 # awake for a reason of its own; the power state itself comes from sysfs,
 # which never touches the device.
 
-# While awake with no client we can see (an idle timeout in progress, or a
-# root/container workload whose fds we cannot read), query at most this often
-# and serve the cached reading in between, so the GPU can still fall asleep.
-AWAKE_UNSEEN_QUERY_S = 60
+# While awake with no client we can see (the idle timeout before the driver
+# suspends the card, or a root/container workload whose fds we cannot read),
+# query at most this often and serve the cached reading in between. Any query
+# restarts that idle timeout, so this has to be longer than it: measured at a
+# few seconds on the card this was written for (active -> suspended in under
+# 10 s), and 20 s leaves 2x margin. If a card's timeout is longer, this value
+# is what to raise.
+AWAKE_UNSEEN_QUERY_S = 20
 # pci.ids is ~40k lines; anything far beyond that is not the file we expect.
 PCI_IDS_MAX_LINES = 200000
 _NV_CLIENT_DEV = re.compile(r"^/dev/nvidia(\d+|-uvm)$")
@@ -300,23 +305,33 @@ def _cache_load():
 
 
 def _cache_save(t, gpus):
+    """Replace the cache file atomically, in a private temp file beside it."""
     path = _cache_path()
     if not path:
         return
+    tmp = None
     try:
-        tmp = path + ".tmp"
-        with open(tmp, "w") as f:
+        fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path),
+                                   prefix=".omarchy-gpu-", suffix=".tmp")
+        with os.fdopen(fd, "w") as f:
             json.dump({"t": t, "gpus": gpus}, f)
         os.replace(tmp, path)
     except OSError:
-        pass
+        if tmp is not None:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
 
 
 def nvidia_pci_power():
-    """[(slot, runtime_status)] for NVIDIA display-class PCI functions.
+    """[(slot, power_control, runtime_status)] for NVIDIA display-class functions.
 
-    vendor/class are cached by the kernel and runtime_status is PM core
-    state: reading them never resumes the device.
+    vendor/class are cached by the kernel, and power/control and
+    runtime_status are PM core state: reading them never resumes the device.
+    power/control is "auto" only when userspace handed the device to runtime
+    PM; with "on" (the default on desktops) the card can never suspend, so
+    there is nothing to protect and every poll can query.
     """
     out = []
     for dev in sorted(glob.glob("/sys/bus/pci/devices/*")):
@@ -324,8 +339,9 @@ def nvidia_pci_power():
             continue
         if not (read(os.path.join(dev, "class")) or "").strip().startswith("0x03"):
             continue
+        control = (read(os.path.join(dev, "power", "control")) or "").strip()
         status = (read(os.path.join(dev, "power", "runtime_status")) or "").strip()
-        out.append((os.path.basename(dev), status))
+        out.append((os.path.basename(dev), control, status))
     return out
 
 
@@ -404,7 +420,8 @@ def nvidia_sleeping(cached, power):
         gpus.append({
             "vendor": "NVIDIA",
             "index": prev.get("index", i),
-            "name": prev.get("name") or (pci_ids_name(power[i][0]) if i < len(power) else None) or "NVIDIA GPU",
+            "name": prev.get("name") or (pci_ids_name(power[i][0])
+                                        if i < len(power) else None) or "NVIDIA GPU",
             "driver": safe_name(driver, FIELD_MAX) if driver else prev.get("driver"),
             "load": 0,
             "memLoad": None,
@@ -428,11 +445,16 @@ def nvidia_gpus(top_n=TOP_DEFAULT):
     if not nvidia_available():
         return []
     power = nvidia_pci_power()
-    statuses = {st for _, st in power}
+    statuses = {status for _, _, status in power}
+    # Only cards handed to runtime PM can suspend at all; with "on" (desktops)
+    # or "unsupported", polling cannot keep the card awake, so query every
+    # time and never serve a cached reading.
+    may_sleep = bool(power) and all(control == "auto" and status != "unsupported"
+                                    for _, control, status in power) and statuses
     cached_t, cached = _cache_load()
     now = time.time()
 
-    if power and statuses <= {"suspended", "suspending"}:
+    if may_sleep and statuses <= {"suspended", "suspending"}:
         gpus = nvidia_sleeping(cached, power)
         if not cached:
             # Remember the pci.ids name so it is looked up once, not per
@@ -440,9 +462,6 @@ def nvidia_gpus(top_n=TOP_DEFAULT):
             _cache_save(0, gpus)
         return gpus
 
-    # "unsupported" (runtime PM off) or no PCI info: the GPU never sleeps, so
-    # polling costs nothing extra -- keep the original behaviour.
-    may_sleep = bool(power) and not statuses <= {"unsupported", ""}
     if may_sleep and cached and not nvidia_has_visible_client():
         if now - cached_t < AWAKE_UNSEEN_QUERY_S:
             return cached
